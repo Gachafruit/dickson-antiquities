@@ -1,0 +1,364 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Dickson Antiquities - Curated antiques and uncommon objects. Visit our eBay storefront for unique finds.">
+    <title>Dickson Antiquities | Curated Antiques & Uncommon Objects</title>
+    <link rel="stylesheet" href="styles.css">
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;600;700&family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
+</head>
+<body>
+    <!-- Sticky Navigation -->
+    <nav class="nav-bar" id="nav">
+        <div class="nav-container">
+            <div class="nav-logo">
+                <!-- REPLACE: Add your logo image here or keep text logo -->
+                <a href="#home">Dickson Antiquities</a>
+            </div>
+            <div class="nav-links">
+                <a href="#home">Home</a>
+                <a href="#featured">Featured</a>
+                <a href="#newest">Newest</a>
+                <a href="#about">About</a>
+                <a href="#contact">Contact</a>
+                <!-- REPLACE: Update href with your actual eBay store URL -->
+                <a href="https://www.ebay.com/str/yourstore" class="btn-primary" target="_blank" rel="noopener">Shop on eBay</a>
+            </div>
+            <button class="nav-toggle" aria-label="Toggle navigation">
+                <span></span>
+                <span></span>
+                <span></span>
+            </button>
+        </div>
+    </nav>
+
+    <!-- Hero Section -->
+    <section class="hero" id="home">
+        <div class="hero-container">
+            <div class="hero-content">
+                <h1>Dickson Antiquities</h1>
+                <p class="hero-tagline">Curated antiques & uncommon objects.</p>
+                <div class="hero-buttons">
+                    <!-- REPLACE: Update href with your actual eBay store URL -->
+                    <a href="https://www.ebay.com/str/yourstore" class="btn-primary" target="_blank" rel="noopener">Visit our eBay store</a>
+                    <a href="#featured" class="btn-secondary">View featured items</a>
+                </div>
+            </div>
+            <div class="hero-image">
+                <!-- REPLACE: Add your hero image(s) here -->
+                <!-- Suggestion: Use a collage of 3-4 signature pieces -->
+                <div class="hero-image-placeholder">
+                    <div class="placeholder-text">Hero Image Collage</div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Trust Strip -->
+    <section class="trust-strip">
+        <div class="trust-container">
+            <div class="trust-item">
+                <svg class="trust-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                    <path d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" stroke-width="2"/>
+                </svg>
+                <div>
+                    <strong>Fast, careful shipping</strong>
+                </div>
+            </div>
+            <div class="trust-item">
+                <svg class="trust-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                    <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z" stroke-width="2"/>
+                    <circle cx="12" cy="10" r="3" stroke-width="2"/>
+                </svg>
+                <div>
+                    <strong>Weekly curated finds</strong>
+                </div>
+            </div>
+            <div class="trust-item">
+                <svg class="trust-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                    <path d="M9 12l2 2 4-4m6 2a9 9 0 1 1-18 0 9 9 0 0 1 18 0z" stroke-width="2"/>
+                </svg>
+                <div>
+                    <strong>30-day returns</strong>
+                </div>
+            </div>
+            <div class="trust-item">
+                <svg class="trust-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                    <path d="M14 9V5a3 3 0 0 0-3-3l-4 9v11h11.28a2 2 0 0 0 2-1.7l1.38-9a2 2 0 0 0-2-2.3zM7 22H4a2 2 0 0 1-2-2v-7a2 2 0 0 1 2-2h3" stroke-width="2"/>
+                </svg>
+                <div>
+                    <strong>Over 99% positive feedback</strong>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Featured Finds Section -->
+    <section class="featured-finds" id="featured">
+        <div class="section-container">
+            <h2 class="section-title">Featured Finds</h2>
+            
+            <div class="product-grid">
+                <!-- REPLACE: Update each card with your actual product data -->
+                <!-- Image, title, price, and link should point to eBay listings -->
+                
+                <article class="product-card">
+                    <div class="product-image">
+                        <div class="placeholder-img">Product Image</div>
+                        <!-- REPLACE with: <img src="path/to/image.jpg" alt="Product name"> -->
+                    </div>
+                    <h3 class="product-title">Antique Silver Tea Set</h3>
+                    <p class="product-price">$265.00</p>
+                    <!-- REPLACE: Update href with actual eBay listing URL -->
+                    <a href="#" class="product-link">View on eBay</a>
+                </article>
+
+                <article class="product-card">
+                    <div class="product-image">
+                        <div class="placeholder-img">Product Image</div>
+                    </div>
+                    <h3 class="product-title">Victorian Inkwell Box</h3>
+                    <p class="product-price">$1,100.00</p>
+                    <a href="#" class="product-link">View on eBay</a>
+                </article>
+
+                <article class="product-card">
+                    <div class="product-image">
+                        <div class="placeholder-img">Product Image</div>
+                    </div>
+                    <h3 class="product-title">Antique Brass Vessel</h3>
+                    <p class="product-price">$5,999.00</p>
+                    <a href="#" class="product-link">View on eBay</a>
+                </article>
+
+                <article class="product-card">
+                    <div class="product-image">
+                        <div class="placeholder-img">Product Image</div>
+                    </div>
+                    <h3 class="product-title">French Alabaster Casket</h3>
+                    <p class="product-price">$895.00</p>
+                    <a href="#" class="product-link">View on eBay</a>
+                </article>
+
+                <article class="product-card">
+                    <div class="product-image">
+                        <div class="placeholder-img">Product Image</div>
+                    </div>
+                    <h3 class="product-title">Chinese Porcelain Vase</h3>
+                    <p class="product-price">$375.00</p>
+                    <a href="#" class="product-link">View on eBay</a>
+                </article>
+
+                <article class="product-card">
+                    <div class="product-image">
+                        <div class="placeholder-img">Product Image</div>
+                    </div>
+                    <h3 class="product-title">Art Deco Clock</h3>
+                    <p class="product-price">$650.00</p>
+                    <a href="#" class="product-link">View on eBay</a>
+                </article>
+
+                <article class="product-card">
+                    <div class="product-image">
+                        <div class="placeholder-img">Product Image</div>
+                    </div>
+                    <h3 class="product-title">Antique Writing Set</h3>
+                    <p class="product-price">$425.00</p>
+                    <a href="#" class="product-link">View on eBay</a>
+                </article>
+
+                <article class="product-card">
+                    <div class="product-image">
+                        <div class="placeholder-img">Product Image</div>
+                    </div>
+                    <h3 class="product-title">Crystal Decanter Set</h3>
+                    <p class="product-price">$890.00</p>
+                    <a href="#" class="product-link">View on eBay</a>
+                </article>
+
+                <article class="product-card">
+                    <div class="product-image">
+                        <div class="placeholder-img">Product Image</div>
+                    </div>
+                    <h3 class="product-title">Bronze Sculpture</h3>
+                    <p class="product-price">$1,250.00</p>
+                    <a href="#" class="product-link">View on eBay</a>
+                </article>
+            </div>
+
+            <!-- REPLACE: Update href with your eBay store URL -->
+            <div class="section-cta">
+                <a href="https://www.ebay.com/str/yourstore" class="btn-text" target="_blank" rel="noopener">
+                    View all featured items →
+                </a>
+            </div>
+        </div>
+    </section>
+
+    <!-- Newest Listings Section -->
+    <section class="newest-listings" id="newest">
+        <div class="section-container">
+            <div class="section-header">
+                <div>
+                    <h2 class="section-title">Newest Listings</h2>
+                    <p class="section-subtitle">Live from our eBay storefront</p>
+                </div>
+                <!-- REPLACE: Update href with your eBay store URL -->
+                <a href="https://www.ebay.com/str/yourstore" class="btn-text" target="_blank" rel="noopener">
+                    View all on eBay →
+                </a>
+            </div>
+
+            <!-- eBay Widget Container -->
+            <!-- REPLACE: Paste your eBay scrolling widget embed code here -->
+            <!-- The widget code typically looks like an iframe or script tag from eBay -->
+            <div class="ebay-widget-container" id="ebayWidget">
+                <!-- PASTE EBAY WIDGET CODE HERE -->
+                <!-- Example: <iframe src="..." width="100%" height="..." frameborder="0"></iframe> -->
+                
+                <!-- Fallback: Horizontal scrolling product cards (remove when widget is added) -->
+                <div class="horizontal-scroll">
+                    <button class="scroll-btn scroll-btn-left" aria-label="Scroll left">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                            <path d="M15 18l-6-6 6-6" stroke-width="2"/>
+                        </svg>
+                    </button>
+                    
+                    <div class="scroll-container">
+                        <div class="scroll-content">
+                            <!-- Placeholder cards - remove when eBay widget is added -->
+                            <div class="newest-card">
+                                <div class="placeholder-img-small">Image</div>
+                                <p class="newest-price">$95.00</p>
+                            </div>
+                            <div class="newest-card">
+                                <div class="placeholder-img-small">Image</div>
+                                <p class="newest-price">$65.00</p>
+                            </div>
+                            <div class="newest-card">
+                                <div class="placeholder-img-small">Image</div>
+                                <p class="newest-price">$225.00</p>
+                            </div>
+                            <div class="newest-card">
+                                <div class="placeholder-img-small">Image</div>
+                                <p class="newest-price">$225.00</p>
+                            </div>
+                            <div class="newest-card">
+                                <div class="placeholder-img-small">Image</div>
+                                <p class="newest-price">$189.00</p>
+                            </div>
+                            <div class="newest-card">
+                                <div class="placeholder-img-small">Image</div>
+                                <p class="newest-price">$425.00</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <button class="scroll-btn scroll-btn-right" aria-label="Scroll right">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                            <path d="M9 18l6-6-6-6" stroke-width="2"/>
+                        </svg>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Social Links Section -->
+    <section class="social-links">
+        <div class="section-container">
+            <div class="social-grid">
+                <!-- REPLACE: Update all social media URLs -->
+                <a href="https://www.ebay.com/str/yourstore" class="social-card social-ebay" target="_blank" rel="noopener">
+                    <svg class="social-icon" viewBox="0 0 24 24" fill="currentColor">
+                        <path d="M7.54 14.32c0 1.88 1.48 3.18 3.8 3.18 1.63 0 2.75-.62 3.44-1.88h2.83c-.97 2.6-3.38 4.18-6.3 4.18-4.1 0-6.74-2.43-6.74-6.02s2.64-6.02 6.74-6.02c3.97 0 6.48 2.57 6.48 5.97 0 .2-.02.4-.05.59H7.54zm7.38-2.3c-.25-1.63-1.6-2.68-3.53-2.68-1.85 0-3.13 1.02-3.55 2.68h7.08zM2.06 7.78h3.02v8.8c0 1.78-.97 2.95-2.47 2.95-.42 0-.8-.08-1.08-.2v-2.32c.15.05.33.08.52.08.5 0 .78-.28.78-.9V7.78H2.06zm17.76 0h2.83v9.45c0 2.65-1.5 4.25-4.05 4.25-2.33 0-3.92-1.35-4.1-3.48h2.88c.15.9.73 1.4 1.55 1.4 1.03 0 1.73-.68 1.73-1.93V7.78h-.84z"/>
+                    </svg>
+                    <div>
+                        <strong>Visit our eBay Store</strong>
+                        <p>Browse our full collection</p>
+                    </div>
+                </a>
+
+                <a href="https://www.instagram.com/yourhandle" class="social-card" target="_blank" rel="noopener">
+                    <svg class="social-icon" viewBox="0 0 24 24" fill="currentColor">
+                        <rect x="2" y="2" width="20" height="20" rx="5" ry="5"/>
+                        <path fill="#fff" d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z"/>
+                        <circle fill="#fff" cx="17.5" cy="6.5" r="1.5"/>
+                    </svg>
+                    <div>
+                        <strong>Follow us on Instagram</strong>
+                        <p>Daily finds & behind-the-scenes</p>
+                    </div>
+                </a>
+
+                <a href="https://www.facebook.com/yourpage" class="social-card" target="_blank" rel="noopener">
+                    <svg class="social-icon" viewBox="0 0 24 24" fill="currentColor">
+                        <path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/>
+                    </svg>
+                    <div>
+                        <strong>Follow us on Facebook</strong>
+                        <p>Updates & community</p>
+                    </div>
+                </a>
+            </div>
+        </div>
+    </section>
+
+    <!-- About Section -->
+    <section class="about-section" id="about">
+        <div class="section-container">
+            <h2 class="section-title">About Dickson Antiquities</h2>
+            <div class="about-content">
+                <!-- REPLACE: Update with your actual about text -->
+                <p>
+                    With over a decade of experience in curating exceptional antiques and uncommon objects, 
+                    Dickson Antiquities specializes in sourcing unique pieces that tell a story. From 
+                    Victorian-era collectibles to mid-century treasures, each item in our collection is 
+                    carefully selected for its historical significance, craftsmanship, and aesthetic appeal.
+                </p>
+                <p>
+                    We pride ourselves on authenticity, detailed documentation, and providing collectors 
+                    with pieces they'll treasure for generations. Every item is photographed extensively 
+                    and ships with care to ensure it arrives in perfect condition.
+                </p>
+            </div>
+        </div>
+    </section>
+
+    <!-- Footer -->
+    <footer class="footer" id="contact">
+        <div class="footer-container">
+            <div class="footer-content">
+                <div class="footer-section">
+                    <h3>Contact</h3>
+                    <!-- REPLACE: Update with your contact email -->
+                    <p><a href="mailto:contact@dicksonantiquities.com">contact@dicksonantiquities.com</a></p>
+                </div>
+                <div class="footer-section">
+                    <h3>Location</h3>
+                    <!-- REPLACE: Update with your city and state -->
+                    <p>City, State</p>
+                </div>
+                <div class="footer-section">
+                    <h3>Follow</h3>
+                    <div class="footer-social">
+                        <!-- REPLACE: Update all social URLs -->
+                        <a href="https://www.ebay.com/str/yourstore" target="_blank" rel="noopener">eBay</a>
+                        <a href="https://www.instagram.com/yourhandle" target="_blank" rel="noopener">Instagram</a>
+                        <a href="https://www.facebook.com/yourpage" target="_blank" rel="noopener">Facebook</a>
+                    </div>
+                </div>
+            </div>
+            <div class="footer-bottom">
+                <p>&copy; 2024 Dickson Antiquities. All rights reserved.</p>
+            </div>
+        </div>
+    </footer>
+
+    <script src="script.js"></script>
+</body>
+</html>
