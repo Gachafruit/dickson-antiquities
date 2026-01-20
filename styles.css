@@ -271,6 +271,7 @@ button {
   width: 100%;
   height: 500px;
   object-fit: cover;
+  object-position: 78% center; /* <-- Yo, Banana, adjust the banner alignment here */
   display: block;
 }
 
@@ -803,3 +804,4 @@ button {
     }
 
 }
+
