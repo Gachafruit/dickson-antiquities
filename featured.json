@@ -1,5 +1,5 @@
 {
-  "updatedAt": "2026-01-24T10:59:54.593Z",
+  "updatedAt": "2026-01-24T22:38:52.266Z",
   "tiles": [
     {
       "id": "T1",
@@ -21,12 +21,12 @@
     },
     {
       "id": "T3",
-      "title": "Antique 1906 Chinese Bronze Cloisonné Art Vase w/ Hand Painted Enamel",
-      "price": "$88.00",
-      "url": "https://ebay.us/m/OPmBy6",
+      "title": "Antique 19th Century French Japy Fréres Dragon Clock - Brass Body & Enamel Dial",
+      "price": "$2,499.99",
+      "url": "https://ebay.us/m/yvMxSv",
       "mode": "remote",
       "localImage": "images/featured/T3.jpg",
-      "remoteImage": "https://i.ebayimg.com/images/g/I1cAAeSw4t9o4-oF/s-l1600.webp"
+      "remoteImage": "https://i.ebayimg.com/images/g/gGoAAeSwjNRpDOl5/s-l1600.webp"
     },
     {
       "id": "T4",
