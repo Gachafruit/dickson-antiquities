@@ -1,0 +1,342 @@
+/* ============================================
+   FEATURED TILES MANAGER STYLES
+   Clean, professional admin interface
+   ============================================ */
+
+:root {
+    --primary: #a67c52;
+    --primary-hover: #8b6743;
+    --secondary: #e7e5e4;
+    --border: #d4d4d4;
+    --bg-light: #fafaf9;
+    --bg-white: #ffffff;
+    --text-dark: #1c1917;
+    --text-mid: #44403c;
+    --text-light: #a8a29e;
+    --success: #16a34a;
+    --warning: #ea580c;
+    --danger: #dc2626;
+}
+
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    background-color: var(--bg-light);
+    color: var(--text-dark);
+    line-height: 1.6;
+}
+
+.manager-container {
+    max-width: 1400px;
+    margin: 0 auto;
+    padding: 2rem;
+}
+
+/* Header */
+.manager-header {
+    text-align: center;
+    margin-bottom: 2rem;
+    padding-bottom: 2rem;
+    border-bottom: 2px solid var(--border);
+}
+
+.manager-header h1 {
+    font-size: 2rem;
+    font-weight: 600;
+    color: var(--text-dark);
+    margin-bottom: 0.5rem;
+}
+
+.subtitle {
+    color: var(--text-light);
+    font-size: 0.95rem;
+}
+
+/* Toolbar */
+.toolbar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 1rem;
+    margin-bottom: 1.5rem;
+    padding: 1rem;
+    background: var(--bg-white);
+    border-radius: 8px;
+    border: 1px solid var(--border);
+    flex-wrap: wrap;
+}
+
+.toolbar-group {
+    display: flex;
+    gap: 0.75rem;
+    flex-wrap: wrap;
+}
+
+/* Buttons */
+.btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.625rem 1.25rem;
+    font-size: 0.9rem;
+    font-weight: 500;
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.btn-primary {
+    background-color: var(--primary);
+    color: white;
+}
+
+.btn-primary:hover {
+    background-color: var(--primary-hover);
+}
+
+.btn-secondary {
+    background-color: var(--bg-white);
+    color: var(--text-mid);
+    border: 1px solid var(--border);
+}
+
+.btn-secondary:hover {
+    background-color: var(--bg-light);
+    border-color: var(--primary);
+}
+
+.icon {
+    font-size: 1rem;
+}
+
+/* Status Bar */
+.status-bar {
+    padding: 0.75rem 1rem;
+    margin-bottom: 1.5rem;
+    border-radius: 6px;
+    font-size: 0.9rem;
+    display: none;
+}
+
+.status-bar.show {
+    display: block;
+}
+
+.status-bar.success {
+    background-color: #dcfce7;
+    color: var(--success);
+    border: 1px solid var(--success);
+}
+
+.status-bar.error {
+    background-color: #fee2e2;
+    color: var(--danger);
+    border: 1px solid var(--danger);
+}
+
+.status-bar.info {
+    background-color: #dbeafe;
+    color: #2563eb;
+    border: 1px solid #2563eb;
+}
+
+/* Tiles Grid */
+.tiles-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
+    gap: 1.5rem;
+}
+
+/* Tile Editor */
+.tile-editor {
+    background: var(--bg-white);
+    border: 2px solid var(--border);
+    border-radius: 8px;
+    padding: 1.25rem;
+    transition: border-color 0.2s;
+}
+
+.tile-editor:hover {
+    border-color: var(--primary);
+}
+
+.tile-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 1rem;
+    padding-bottom: 0.75rem;
+    border-bottom: 1px solid var(--secondary);
+}
+
+.tile-id {
+    font-size: 1.1rem;
+    font-weight: 600;
+    color: var(--primary);
+}
+
+.tile-preview-mini {
+    font-size: 0.8rem;
+    color: var(--text-light);
+}
+
+/* Form Fields */
+.form-group {
+    margin-bottom: 1rem;
+}
+
+.form-group label {
+    display: block;
+    font-size: 0.85rem;
+    font-weight: 500;
+    color: var(--text-mid);
+    margin-bottom: 0.4rem;
+}
+
+.form-group input[type="text"],
+.form-group input[type="url"] {
+    width: 100%;
+    padding: 0.625rem;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    font-size: 0.9rem;
+    transition: border-color 0.2s;
+}
+
+.form-group input:focus {
+    outline: none;
+    border-color: var(--primary);
+}
+
+/* Image Mode Toggle */
+.mode-toggle {
+    display: flex;
+    gap: 0.5rem;
+    margin-bottom: 1rem;
+}
+
+.mode-btn {
+    flex: 1;
+    padding: 0.5rem;
+    background: var(--bg-light);
+    border: 2px solid var(--border);
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 0.85rem;
+    font-weight: 500;
+    transition: all 0.2s;
+}
+
+.mode-btn.active {
+    background: var(--primary);
+    color: white;
+    border-color: var(--primary);
+}
+
+.mode-btn:hover:not(.active) {
+    border-color: var(--primary);
+}
+
+/* Image Upload Area */
+.image-upload {
+    border: 2px dashed var(--border);
+    border-radius: 6px;
+    padding: 1.5rem;
+    text-align: center;
+    background: var(--bg-light);
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.image-upload:hover {
+    border-color: var(--primary);
+    background: white;
+}
+
+.image-upload.dragover {
+    border-color: var(--primary);
+    background: var(--bg-white);
+}
+
+.upload-icon {
+    font-size: 2rem;
+    margin-bottom: 0.5rem;
+}
+
+.upload-text {
+    font-size: 0.85rem;
+    color: var(--text-mid);
+}
+
+.upload-subtext {
+    font-size: 0.75rem;
+    color: var(--text-light);
+    margin-top: 0.25rem;
+}
+
+/* Image Preview */
+.image-preview {
+    margin-top: 0.75rem;
+    text-align: center;
+}
+
+.preview-img {
+    max-width: 100%;
+    max-height: 150px;
+    border-radius: 6px;
+    border: 1px solid var(--border);
+}
+
+.preview-filename {
+    font-size: 0.8rem;
+    color: var(--text-mid);
+    margin-top: 0.5rem;
+    word-break: break-all;
+}
+
+.clear-image {
+    margin-top: 0.5rem;
+    padding: 0.4rem 0.8rem;
+    font-size: 0.8rem;
+    background: var(--danger);
+    color: white;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+}
+
+.clear-image:hover {
+    opacity: 0.9;
+}
+
+/* Hidden Elements */
+.hidden {
+    display: none !important;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+    .manager-container {
+        padding: 1rem;
+    }
+
+    .tiles-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .toolbar {
+        flex-direction: column;
+        align-items: stretch;
+    }
+
+    .toolbar-group {
+        width: 100%;
+        justify-content: center;
+    }
+}

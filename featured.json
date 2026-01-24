@@ -1,0 +1,86 @@
+{
+  "updatedAt": "2026-01-24T10:19:34.823Z",
+  "tiles": [
+    {
+      "id": "T1",
+      "title": "Antique Hsun-Ok Burmese Offering Vessel",
+      "price": "$5999",
+      "url": "https://www.ebay.com/itm/187370603142?itmmeta=01KFQR4BMDQ2318TS15JKYPTYH&hash=item2ba0288286:g:0EAAAeSwPiRpClG1",
+      "mode": "remote",
+      "localImage": "images/featured/T1.jpg",
+      "remoteImage": "https://i.ebayimg.com/images/g/0EAAAeSwPiRpClG1/s-l1600.webp"
+    },
+    {
+      "id": "T2",
+      "title": "",
+      "price": "",
+      "url": "",
+      "mode": "local",
+      "localImage": "images/featured/T2.jpg",
+      "remoteImage": ""
+    },
+    {
+      "id": "T3",
+      "title": "",
+      "price": "",
+      "url": "",
+      "mode": "local",
+      "localImage": "images/featured/T3.jpg",
+      "remoteImage": ""
+    },
+    {
+      "id": "T4",
+      "title": "",
+      "price": "",
+      "url": "",
+      "mode": "local",
+      "localImage": "images/featured/T4.jpg",
+      "remoteImage": ""
+    },
+    {
+      "id": "T5",
+      "title": "",
+      "price": "",
+      "url": "",
+      "mode": "local",
+      "localImage": "images/featured/T5.jpg",
+      "remoteImage": ""
+    },
+    {
+      "id": "T6",
+      "title": "",
+      "price": "",
+      "url": "",
+      "mode": "local",
+      "localImage": "images/featured/T6.jpg",
+      "remoteImage": ""
+    },
+    {
+      "id": "T7",
+      "title": "",
+      "price": "",
+      "url": "",
+      "mode": "local",
+      "localImage": "images/featured/T7.jpg",
+      "remoteImage": ""
+    },
+    {
+      "id": "T8",
+      "title": "",
+      "price": "",
+      "url": "",
+      "mode": "local",
+      "localImage": "images/featured/T8.jpg",
+      "remoteImage": ""
+    },
+    {
+      "id": "T9",
+      "title": "",
+      "price": "",
+      "url": "",
+      "mode": "local",
+      "localImage": "images/featured/T9.jpg",
+      "remoteImage": ""
+    }
+  ]
+}
