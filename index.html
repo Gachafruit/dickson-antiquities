@@ -243,6 +243,34 @@
         </div>
     </section>
 
+    <!-- Showcase Section -->
+<!-- Add this AFTER the Featured Finds section and BEFORE Newest Listings -->
+<section class="showcase-section" id="showcase">
+    <div class="section-container">
+        <div class="section-header">
+            <div>
+                <h2 class="section-title">From Our Collection</h2>
+                <p class="section-subtitle">A curated selection of exceptional pieces</p>
+            </div>
+        </div>
+
+        <!-- Loading message -->
+        <div id="showcaseLoading" class="showcase-message">
+            <p>Loading items...</p>
+        </div>
+
+        <!-- Error message -->
+        <div id="showcaseError" class="showcase-message showcase-error" style="display: none;">
+            <p>Unable to load items. Please refresh the page.</p>
+        </div>
+
+        <!-- Items list -->
+        <div id="showcaseItemsList" class="showcase-list">
+            <!-- Items will be populated by JavaScript -->
+        </div>
+    </div>
+</section>
+
     <!-- Newest Listings Section -->
     <section class="newest-listings" id="newest">
         <div class="section-container">
@@ -407,6 +435,10 @@
 
     <script src="script.js"></script>
     <script src="featured-loader.js"></script>
-</body>
 
+    <script src="script.js"></script>
+    <script src="featured-loader.js"></script>
+    <script src="showcase-loader.js"></script>  <!-- ADD THIS -->
+
+</body>
 </html>
