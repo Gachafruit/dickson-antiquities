@@ -244,98 +244,59 @@
     </section>
 
     <!-- Showcase Section -->
-<!-- Add this AFTER the Featured Finds section and BEFORE Newest Listings -->
-<section class="showcase-section" id="showcase">
-    <div class="section-container">
-        <div class="section-header">
-            <div>
-                <h2 class="section-title">From Our Collection</h2>
-                <p class="section-subtitle">A curated selection of exceptional pieces</p>
-            </div>
-        </div>
-
-        <!-- Loading message -->
-        <div id="showcaseLoading" class="showcase-message">
-            <p>Loading items...</p>
-        </div>
-
-        <!-- Error message -->
-        <div id="showcaseError" class="showcase-message showcase-error" style="display: none;">
-            <p>Unable to load items. Please refresh the page.</p>
-        </div>
-
-        <!-- Items list -->
-        <div id="showcaseItemsList" class="showcase-list">
-            <!-- Items will be populated by JavaScript -->
-        </div>
-    </div>
-</section>
-
-    <!-- Newest Listings Section -->
-    <section class="newest-listings" id="newest">
+    <!-- Add this AFTER the Featured Finds section and BEFORE Newest Listings -->
+    <section class="showcase-section" id="showcase">
         <div class="section-container">
             <div class="section-header">
                 <div>
-                    <h2 class="section-title">Newest Listings</h2>
-                    <p class="section-subtitle">Live from our eBay storefront</p>
+                    <h2 class="section-title">From Our Collection</h2>
+                    <p class="section-subtitle">A curated selection of exceptional pieces</p>
                 </div>
-                <!-- REPLACE: Update href with your eBay store URL -->
-                <a href="https://www.ebay.com/str/dicksonantiques" class="btn-text" target="_blank" rel="noopener">
-                    View all on eBay →
-                </a>
             </div>
 
-            <!-- eBay Widget Container -->
-            <!-- REPLACE: Paste your eBay scrolling widget embed code here -->
-            <!-- The widget code typically looks like an iframe or script tag from eBay -->
-            <div class="ebay-widget-container" id="ebayWidget">
-                <!-- PASTE EBAY WIDGET CODE HERE -->
-                <!-- Example: <iframe src="..." width="100%" height="..." frameborder="0"></iframe> -->
+            <!-- Loading message -->
+            <div id="showcaseLoading" class="showcase-message">
+                <p>Loading items...</p>
+            </div>
 
-                <!-- Fallback: Horizontal scrolling product cards (remove when widget is added) -->
-                <div class="horizontal-scroll">
-                    <button class="scroll-btn scroll-btn-left" aria-label="Scroll left">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
-                            <path d="M15 18l-6-6 6-6" stroke-width="2" />
-                        </svg>
-                    </button>
+            <!-- Error message -->
+            <div id="showcaseError" class="showcase-message showcase-error" style="display: none;">
+                <p>Unable to load items. Please refresh the page.</p>
+            </div>
 
-                    <div class="scroll-container">
-                        <div class="scroll-content">
-                            <!-- Placeholder cards - remove when eBay widget is added -->
-                            <div class="newest-card">
-                                <div class="placeholder-img-small">Image</div>
-                                <p class="newest-price">$95.00</p>
-                            </div>
-                            <div class="newest-card">
-                                <div class="placeholder-img-small">Image</div>
-                                <p class="newest-price">$65.00</p>
-                            </div>
-                            <div class="newest-card">
-                                <div class="placeholder-img-small">Image</div>
-                                <p class="newest-price">$225.00</p>
-                            </div>
-                            <div class="newest-card">
-                                <div class="placeholder-img-small">Image</div>
-                                <p class="newest-price">$225.00</p>
-                            </div>
-                            <div class="newest-card">
-                                <div class="placeholder-img-small">Image</div>
-                                <p class="newest-price">$189.00</p>
-                            </div>
-                            <div class="newest-card">
-                                <div class="placeholder-img-small">Image</div>
-                                <p class="newest-price">$425.00</p>
-                            </div>
-                        </div>
-                    </div>
+            <!-- Items list -->
+            <div id="showcaseItemsList" class="showcase-list">
+                <!-- Items will be populated by JavaScript -->
+            </div>
+        </div>
+    </section>
 
-                    <button class="scroll-btn scroll-btn-right" aria-label="Scroll right">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
-                            <path d="M9 18l6-6-6-6" stroke-width="2" />
-                        </svg>
-                    </button>
+    <!-- Instagram Section -->
+    <!-- Add this AFTER the Showcase section -->
+    <section class="instagram-section" id="instagram">
+        <div class="section-container">
+            <div class="section-header">
+                <div>
+                    <h2 class="section-title">Follow Our Journey</h2>
+                    <p class="section-subtitle">
+                        <a href="https://www.instagram.com/dicksonantiquities" target="_blank" rel="noopener noreferrer"
+                            class="instagram-handle">
+                            @dicksonantiquities
+                        </a>
+                    </p>
                 </div>
+            </div>
+
+            <!-- Instagram Grid -->
+            <div id="instagramGrid" class="instagram-grid">
+                <!-- Posts will be populated by JavaScript -->
+            </div>
+
+            <div class="section-cta">
+                <a href="https://www.instagram.com/dicksonantiquities" class="btn-text" target="_blank"
+                    rel="noopener noreferrer">
+                    View on Instagram →
+                </a>
             </div>
         </div>
     </section>
@@ -388,7 +349,8 @@
             <div class="about-content">
                 <!-- REPLACE: Update with our actual about text -->
                 <p>
-                    With roots dating back to the 1960s and decades of experience in curating exceptional antiques and uncommon objects,
+                    With roots dating back to the 1960s and decades of experience in curating exceptional antiques and
+                    uncommon objects,
                     Dickson Antiquities specializes in sourcing unique pieces that tell a story. From
                     Victorian-era collectibles to mid-century treasures, each item in our collection is
                     carefully selected for its historical significance, craftsmanship, and aesthetic appeal.
@@ -438,7 +400,10 @@
 
     <script src="script.js"></script>
     <script src="featured-loader.js"></script>
-    <script src="showcase-loader.js"></script>  <!-- ADD THIS -->
+    <script src="showcase-loader.js"></script> <!-- ADD THIS -->
+
+    <script src="instagram-loader.js"></script>
 
 </body>
+
 </html>
