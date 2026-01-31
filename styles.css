@@ -1057,3 +1057,39 @@ button {
         transform: scale(1.03);
     }
 }
+
+/* Moves the entire logo + text unit 10px to the left */
+.about-content-wrapper {
+    display: flex;
+    align-items: center; 
+    gap: 2.5rem;
+    max-width: 900px;
+    margin: 0 auto;
+    position: relative;
+    left: -210px; /* Adjust this to "hand guide" the whole unit left/right */
+}
+
+/* Re-establishes the spacing between the two paragraphs */
+.about-text p {
+    margin-bottom: var(--spacing-md);
+}
+
+.about-text p:last-child {
+    margin-bottom: 0;
+}
+
+.about-logo {
+    flex-shrink: 0;
+    width: 220px; 
+    height: 220px; 
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
+.about-logo-img {
+    width: 180px;
+    height: 180px;
+    display: block;
+    transform: translate(15px, 10px); 
+}
