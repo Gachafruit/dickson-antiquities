@@ -1093,3 +1093,23 @@ button {
     display: block;
     transform: translate(15px, 10px); 
 }
+
+/* 1. Simplify the Hero background to a single solid color */
+.hero {
+    background-color: var(--off-white) !important;
+    background-image: none !important;
+}
+
+/* 2. Update the side-fade to be a solid wall of that same color on the left */
+.hero-image::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    /* We ensure the 0% to 10% range is 100% solid off-white */
+    background: linear-gradient(to right,
+            var(--off-white) 0%,
+            var(--off-white) 10%, 
+            rgba(250, 250, 249, 0.8) 30%,
+            rgba(250, 250, 249, 0) 60%) !important;
+    pointer-events: none;
+}
