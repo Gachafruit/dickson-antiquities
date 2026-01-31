@@ -200,6 +200,18 @@ button {
     color: var(--black);
 }
 
+.nav-logo a {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.nav-logo-icon {
+    width: 62px;
+    height: 62px;
+    display: block;
+}
+
 .nav-links {
     display: flex;
     align-items: center;
