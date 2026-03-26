@@ -762,7 +762,7 @@ button {
 @media (max-width: 768px) {
     .nav-links {
         position: fixed;
-        top: 69px;
+        top: 95px;
         left: 0;
         right: 0;
         background-color: var(--white);
