@@ -9,26 +9,36 @@
  *                          ?ids=<comma-separated> optional; defaults to the full
  *                          list in the deployed showcase.json.
  *
- * The /showcase/status route reuses the existing OAuth token, KV cache and eBay
- * Browse API lookup. It classifies each id as:
- *   active       eBay returned the item (HTTP 200 with a usable body)
- *   unavailable  eBay returned 404 "not found" (ended / removed / sold)
- *   unverified   ANY ambiguous outcome — auth error, rate limit, 5xx, timeout,
- *                network failure, malformed body, unexpected 404 error code.
+ * Availability classification (see classifyItemBody):
+ *   A 200 from the eBay Browse API does NOT by itself mean "active" — eBay keeps
+ *   returning ended/sold listings (HTTP 200 with full data) for a while.
+ *
+ *   active       body's availability signals (itemEndDate, estimated availability
+ *                status/quantity) all say live, none say ended
+ *   unavailable  HTTP 404 (errorId 11001/11002)  -OR-  body's signals all say
+ *                ended (past itemEndDate and/or OUT_OF_STOCK / qty 0), none say live
+ *   unverified   ANY ambiguous outcome — no usable availability fields,
+ *                contradictory fields, auth error, rate limit, 5xx, timeout,
+ *                network failure, malformed body, unexpected 404 code.
  *                Unverified items are NEVER eligible for automatic cleanup.
  */
 
 // ── Cache keys / tuning ──────────────────────────────────────────────────────
 const TOKEN_CACHE_KEY = 'ebay_app_token';
 const ITEMS_CACHE_PREFIX = 'ebay_item_';
-const STATUS_CACHE_PREFIX = 'ebay_status_';
+// v2: bumped when the status classification rules change so stale "active"
+// verdicts for now-ended items are not served from an old cache.
+const STATUS_CACHE_PREFIX = 'ebay_status_v2_';
 const TOKEN_CACHE_DURATION = 7000; // ~2 hours (eBay tokens expire at 7200s)
 const ITEM_CACHE_DURATION = 3600; // 1 hour per item
-const STATUS_CACHE_ACTIVE_TTL = 3600; // 1 hour
+const STATUS_CACHE_ACTIVE_TTL = 900; // 15 min — short, so a transient stale "active" self-heals
 const STATUS_CACHE_UNAVAILABLE_TTL = 21600; // 6 hours (sold stays sold)
-const STATUS_CONCURRENCY = 6; // parallel eBay lookups per batch
+const STATUS_CONCURRENCY = 4; // parallel eBay lookups — gentle enough to avoid stale burst responses
 const STATUS_MAX_IDS = 250; // hard cap on ids checked per request
 const EBAY_TIMEOUT_MS = 8000;
+const RETRY_DELAY_MS = 400;
+// A verdict of `unverified` for one of these reasons is retried once.
+const TRANSIENT_REASON = /^(timeout|network-error|http-(429|5\d\d))$/;
 
 const PUBLIC_ORIGIN = 'https://dicksonantiquities.com';
 
@@ -382,18 +392,31 @@ async function classifyAll(ids, token, env, ctx) {
 }
 
 async function classifyItemId(itemId, token, env, ctx) {
-  // Fast paths from KV — reuse what the public route already cached.
+  // Fast path: a definitive verdict cached by a previous /showcase/status run.
+  // (The public route's ebay_item_ cache is NOT trusted here — it stores any
+  //  HTTP 200 body, including still-returned sold listings.)
   if (env.SHOWCASE_CACHE) {
     const cachedStatus = await env.SHOWCASE_CACHE.get(`${STATUS_CACHE_PREFIX}${itemId}`).catch(() => null);
     if (cachedStatus === 'active' || cachedStatus === 'unavailable') {
       return { id: itemId, status: cachedStatus, reason: 'cache' };
     }
-    const cachedItem = await env.SHOWCASE_CACHE.get(`${ITEMS_CACHE_PREFIX}${itemId}`, 'json').catch(() => null);
-    if (cachedItem && cachedItem.id) {
-      return { id: itemId, status: 'active', reason: 'item-cache', title: cachedItem.title || null, url: cachedItem.url || null };
-    }
   }
 
+  let result = await lookupAndClassify(itemId, token);
+
+  // One retry for a transient failure — never for a definitive verdict.
+  if (result.status === 'unverified' && TRANSIENT_REASON.test(result.reason || '')) {
+    await sleep(RETRY_DELAY_MS);
+    result = await lookupAndClassify(itemId, token);
+  }
+
+  if (result.status === 'active' || result.status === 'unavailable') {
+    cacheStatus(env, ctx, itemId, result.status);
+  }
+  return result;
+}
+
+async function lookupAndClassify(itemId, token) {
   let response;
   try {
     response = await fetchWithTimeout(
@@ -409,16 +432,15 @@ async function classifyItemId(itemId, token, env, ctx) {
   } catch (err) {
     return { id: itemId, status: 'unverified', reason: err.name === 'AbortError' ? 'timeout' : 'network-error' };
   }
+  return classifyResponse(itemId, response);
+}
 
-  const result = await classifyResponse(itemId, response);
-  if (result.status === 'active' || result.status === 'unavailable') {
-    cacheStatus(env, ctx, itemId, result.status);
-  }
-  return result;
+function sleep(ms) {
+  return new Promise((r) => setTimeout(r, ms));
 }
 
 /**
- * Pure classification of one eBay Browse API response.
+ * Classify one eBay Browse API response by HTTP status, then (for 200) by body.
  * `response` needs `.status` and an async `.json()`.
  */
 async function classifyResponse(itemId, response) {
@@ -431,21 +453,12 @@ async function classifyResponse(itemId, response) {
     } catch {
       return { id: itemId, status: 'unverified', reason: 'bad-json' };
     }
-    if (data && (data.itemId || data.title || data.itemWebUrl)) {
-      return {
-        id: itemId,
-        status: 'active',
-        reason: null,
-        title: data.title || null,
-        url: data.itemWebUrl || `https://www.ebay.com/itm/${itemId}`,
-      };
-    }
-    return { id: itemId, status: 'unverified', reason: 'unexpected-200-body' };
+    return classifyItemBody(itemId, data);
   }
 
   if (code === 404) {
-    // eBay Browse API returns 404 + errorId 11001/11002 for ended/removed/sold
-    // items. A 404 whose body carries a DIFFERENT error is treated as ambiguous.
+    // eBay Browse API returns 404 + errorId 11001/11002 for removed items. A 404
+    // whose body carries a DIFFERENT error is treated as ambiguous.
     let firstErrorId = null;
     try {
       const body = await response.json();
@@ -465,6 +478,95 @@ async function classifyResponse(itemId, response) {
 
   // 401 / 403 / 429 / 400 / 5xx / anything else → ambiguous, never removable
   return { id: itemId, status: 'unverified', reason: `http-${code}` };
+}
+
+/**
+ * Pure classification of a Browse API `getItem` body (HTTP 200 already checked).
+ * Returns { id, status, reason, title?, url? }.
+ *
+ * eBay keeps serving ended/sold listings as HTTP 200 for a while, so the body
+ * must be read. Two independent fields carry availability:
+ *   · itemEndDate                    — past  ⇒ ended,   future ⇒ live
+ *   · estimatedAvailabilityStatus /  — OUT_OF_STOCK / qty 0 ⇒ ended,
+ *     estimatedAvailableQuantity        IN_STOCK / LIMITED_STOCK ⇒ live
+ * (Observed: a genuinely sold fixed-price listing reports itemEndDate in the
+ *  past AND OUT_OF_STOCK, qty 0, estimatedSoldQuantity 1.)
+ *
+ * Verdict by signal agreement — conservative on any disagreement or silence:
+ *   only "ended" signals, no "live" signal          → unavailable
+ *   only "live"  signals, no "ended" signal         → active
+ *   signals disagree                                → unverified (contradictory)
+ *   no usable availability signal at all            → unverified
+ */
+function classifyItemBody(itemId, data) {
+  const base = { id: itemId };
+  if (!data || typeof data !== 'object' || !(data.itemId || data.title || data.itemWebUrl)) {
+    return { ...base, status: 'unverified', reason: 'unexpected-200-body' };
+  }
+  base.title = data.title || null;
+  base.url = data.itemWebUrl || `https://www.ebay.com/itm/${itemId}`;
+
+  const end = endDateState(data.itemEndDate); // 'past' | 'future' | 'absent'
+  const avail = availabilitySignal(data); // 'in' | 'out' | 'none'
+
+  const ended = [];
+  const live = [];
+  if (end === 'past') ended.push(`ended-${data.itemEndDate}`);
+  if (end === 'future') live.push(`ends-${data.itemEndDate}`);
+  if (avail === 'out') ended.push('out-of-stock');
+  if (avail === 'in') live.push('in-stock');
+
+  if (ended.length && !live.length) {
+    return { ...base, status: 'unavailable', reason: ended.join('+') };
+  }
+  if (live.length && !ended.length) {
+    return { ...base, status: 'active', reason: null };
+  }
+  if (ended.length && live.length) {
+    return { ...base, status: 'unverified', reason: `contradictory:${ended.concat(live).join('+')}` };
+  }
+  return { ...base, status: 'unverified', reason: 'no-availability-signal' };
+}
+
+function endDateState(raw) {
+  if (!raw) return 'absent';
+  const t = Date.parse(raw);
+  if (Number.isNaN(t)) return 'absent';
+  return t < Date.now() ? 'past' : 'future';
+}
+
+/**
+ * Reduce eBay's availability fields to 'in' | 'out' | 'none'.
+ * Checks estimatedAvailabilityStatus (IN_STOCK / LIMITED_STOCK / OUT_OF_STOCK)
+ * and estimatedAvailableQuantity, both top-level and inside estimatedAvailabilities[].
+ */
+function availabilitySignal(data) {
+  const statuses = [];
+  const quantities = [];
+
+  if (typeof data.estimatedAvailabilityStatus === 'string') statuses.push(data.estimatedAvailabilityStatus);
+  if (typeof data.estimatedAvailableQuantity === 'number') quantities.push(data.estimatedAvailableQuantity);
+
+  const arr = Array.isArray(data.estimatedAvailabilities) ? data.estimatedAvailabilities : [];
+  for (const a of arr) {
+    if (a && typeof a.estimatedAvailabilityStatus === 'string') statuses.push(a.estimatedAvailabilityStatus);
+    if (a && typeof a.estimatedAvailableQuantity === 'number') quantities.push(a.estimatedAvailableQuantity);
+  }
+
+  const hasIn = statuses.some((s) => s === 'IN_STOCK' || s === 'LIMITED_STOCK');
+  const hasOut = statuses.some((s) => s === 'OUT_OF_STOCK');
+  const knownStatus = statuses.some((s) => ['IN_STOCK', 'LIMITED_STOCK', 'OUT_OF_STOCK'].includes(s));
+
+  if (hasOut && !hasIn) return 'out';
+  if (hasIn && !hasOut) return 'in';
+  if (hasIn && hasOut) return 'none'; // contradictory statuses → no signal
+
+  // No usable status enum. Fall back to quantity only if it's unambiguous.
+  if (!knownStatus && quantities.length) {
+    if (quantities.every((q) => q === 0)) return 'out';
+    if (quantities.every((q) => q > 0)) return 'in';
+  }
+  return 'none';
 }
 
 function buildStatusCounts(statuses) {
@@ -495,4 +597,13 @@ async function fetchWithTimeout(url, options, ms) {
 }
 
 // Exposed for unit tests (ignored by the Workers runtime).
-export { classifyResponse, buildStatusCounts, parseIdList, parseIdsParam, resolveCorsOrigin };
+export {
+  classifyResponse,
+  classifyItemBody,
+  availabilitySignal,
+  endDateState,
+  buildStatusCounts,
+  parseIdList,
+  parseIdsParam,
+  resolveCorsOrigin,
+};

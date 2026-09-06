@@ -16,4 +16,4 @@ compatibility_date = "2024-11-01"
 # Find your existing id with:  npx wrangler kv namespace list
 [[kv_namespaces]]
 binding = "SHOWCASE_CACHE"
-id = "REPLACE_WITH_YOUR_EXISTING_SHOWCASE_CACHE_NAMESPACE_ID"
+id = "3ee75ffae5664ffbb34524e1d63bf822"

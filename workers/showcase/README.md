@@ -43,21 +43,34 @@ Response:
 }
 ```
 
-Classification:
+Classification — a 200 from the Browse API does **not** by itself mean active
+(eBay serves ended/sold listings as 200 with full data for a while). The body's
+availability signals are read: `itemEndDate` (past ⇒ ended / future ⇒ live) and
+`estimatedAvailabilityStatus` + `estimatedAvailableQuantity` (`OUT_OF_STOCK` or
+qty 0 ⇒ ended / `IN_STOCK` / `LIMITED_STOCK` ⇒ live).
 
 | status        | when                                                                              | auto-cleanup eligible |
 | ------------- | -------------------------------------------------------------------------------- | --------------------- |
-| `active`      | HTTP 200 with a usable item body (or a cached normalized item)                    | no (kept)             |
-| `unavailable` | HTTP 404 — bare, or eBay `errorId` 11001 / 11002 ("item not found")              | **yes**               |
-| `unverified`  | 401 / 403 / 429 / 400 / 5xx, timeout, network error, bad JSON, unexpected 404 code, no OAuth token | **never** |
+| `active`      | HTTP 200, body's availability signals all say live, none say ended               | no (kept)             |
+| `unavailable` | HTTP 404 (`errorId` 11001 / 11002)  **or**  HTTP 200 whose signals all say ended (past `itemEndDate` and/or `OUT_OF_STOCK` / qty 0) | **yes** |
+| `unverified`  | signals disagree; no usable availability field; 401 / 403 / 429 / 400 / 5xx; timeout; network error; bad JSON; unexpected 404 code; no OAuth token | **never** |
+
+The observed signature of a genuinely sold fixed-price listing: HTTP 200,
+`itemEndDate` in the past, `estimatedAvailabilityStatus: OUT_OF_STOCK`,
+`estimatedAvailableQuantity: 0`, `estimatedSoldQuantity: 1`.
 
 CORS: the public origin plus `http://localhost[:port]` / `http://127.0.0.1[:port]`
 / `http://[::1][:port]` so the admin tool works when served locally.
 
-Reuses the existing OAuth token (KV `ebay_app_token`) and per-item cache
-(`ebay_item_<id>`), and adds a short-lived per-status cache (`ebay_status_<id>`,
-1 h for active / 6 h for unavailable; `unverified` is never cached so transient
-failures retry).
+Reuses the existing OAuth token (KV `ebay_app_token`). Adds a short-lived
+per-status cache `ebay_status_v2_<id>` (15 min active / 6 h unavailable;
+`unverified` is never cached). eBay's Browse API occasionally serves a stale
+(pre-sale) body under a concurrent burst, so lookups run at low concurrency (4),
+a transient failure (timeout / network / 429 / 5xx) is retried once, and the
+short "active" TTL lets any stale "active" self-heal on the next check. The
+public route's `ebay_item_<id>` cache is **not** trusted for status — it stores
+any 200 body, sold listings included. The `_v2` suffix is bumped whenever the
+classification rules change so stale verdicts are never served.
 
 ## Deploy
 
