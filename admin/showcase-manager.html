@@ -4,31 +4,34 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="robots" content="noindex, nofollow">
-    <title>Featured Finds Manager — Dickson Antiquities</title>
+    <title>Showcase Manager — Dickson Antiquities</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;600;700&family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="admin.css">
-    <!-- JSZip: only used for the disconnected / unsupported-browser ZIP fallback -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
 </head>
 <body>
     <div class="admin-container">
         <header class="admin-header">
             <a class="back-link" href="index.html">&larr; Content Admin</a>
-            <h1>Featured Finds Manager</h1>
-            <p class="subtitle">The nine featured item tiles (T1–T9) on the homepage. Current content loads automatically.</p>
+            <h1>Showcase Manager</h1>
+            <p class="subtitle">The eBay item IDs behind the homepage “From Our Collection” section. The Cloudflare Worker reads this list from <code>showcase.json</code>.</p>
         </header>
 
         <div class="repo-bar" id="repoBar"></div>
         <div class="conflict-banner" id="conflictBanner" hidden></div>
 
+        <div class="showcase-summary" id="summary" hidden>
+            <span class="showcase-summary__counts" id="summaryCounts"></span>
+            <span class="showcase-summary__spacer"></span>
+            <button class="btn btn-secondary btn-sm" id="recheckBtn"><span class="icon">&#8635;</span> Re-check availability</button>
+            <button class="btn btn-danger btn-sm" id="cleanseBtn" hidden>Cleanse sold listings (0)</button>
+        </div>
+
         <div class="toolbar">
             <div class="toolbar-group">
                 <span class="state-badge badge-empty" id="stateBadge">No data loaded</span>
                 <button class="btn btn-secondary btn-sm" id="reloadBtn"><span class="icon">&#8635;</span> Reload from repository</button>
-                <button class="btn btn-secondary btn-sm" id="importBtn"><span class="icon">&#128229;</span> Import featured.json</button>
-                <input type="file" id="importFile" accept=".json,application/json" hidden>
                 <button class="btn btn-danger btn-sm" id="clearBtn"><span class="icon">&#128465;</span> Clear draft</button>
             </div>
             <div class="toolbar-group toolbar-group--primary">
@@ -38,11 +41,20 @@
 
         <div class="status-bar" id="statusBar" hidden></div>
 
-        <div class="tiles-grid" id="tilesGrid"></div>
+        <div class="showcase-add">
+            <div class="form-group">
+                <label for="newId">Add an eBay item ID</label>
+                <input type="text" id="newId" placeholder="e.g. 187370603142 — or paste a full eBay listing URL">
+            </div>
+            <button class="btn btn-secondary" id="addBtn"><span class="icon">&#43;</span> Add ID</button>
+        </div>
+
+        <p class="showcase-count" id="count"></p>
+        <div class="id-list" id="idList"></div>
     </div>
 
     <script src="repo-fs.js"></script>
     <script src="admin-common.js"></script>
-    <script src="featured-manager.js"></script>
+    <script src="showcase-manager.js"></script>
 </body>
 </html>

@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="robots" content="noindex, nofollow">
+    <title>Content Admin — Dickson Antiquities</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;600;700&family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="admin.css">
+</head>
+<body>
+    <div class="admin-container">
+        <header class="admin-header">
+            <h1>Dickson Antiquities — Content Admin</h1>
+            <p class="subtitle">Edit the parts of the site that change often. The repository is the source of truth; these tools are a window onto it.</p>
+        </header>
+
+        <div class="repo-bar" id="repoBar"></div>
+        <div class="status-bar" id="statusBar" hidden></div>
+
+        <div class="admin-cards">
+            <a class="admin-card" href="featured-manager.html">
+                <h2>Featured Finds Manager</h2>
+                <p>The nine featured item tiles on the homepage — title, price, eBay link, and image (local upload or remote URL) for each slot.</p>
+                <div class="admin-card__meta">Writes <code>featured.json</code> + <code>images/featured/</code></div>
+            </a>
+
+            <a class="admin-card" href="showcase-manager.html">
+                <h2>Showcase Manager</h2>
+                <p>The list of eBay item IDs the “From Our Collection” section pulls from. Add, remove, and reorder IDs.</p>
+                <div class="admin-card__meta">Writes <code>showcase.json</code> (consumed by the Cloudflare Worker)</div>
+            </a>
+        </div>
+
+        <div class="admin-note">
+            <strong>Workflow:</strong> open a manager → current content loads automatically → edit → <em>Save to Repository</em> →
+            review the change with <code>git status</code> / <code>git diff</code> → <code>git commit</code> → <code>git push</code>.
+            Pushing is still what deploys the site (and refreshes the Worker’s source). The Instagram section is Worker-driven and has no manager.
+        </div>
+    </div>
+
+    <script src="repo-fs.js"></script>
+    <script src="admin-common.js"></script>
+    <script>
+        AdminCommon.mountRepoBar(document.getElementById('repoBar'), {
+            statusEl: document.getElementById('statusBar')
+        });
+    </script>
+</body>
+</html>

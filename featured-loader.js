@@ -42,6 +42,13 @@
                     return;
                 }
 
+                // Optional "enabled" flag (absent = shown, matching legacy data).
+                if (tileData.enabled === false) {
+                    card.style.display = 'none';
+                    return;
+                }
+                card.style.display = '';
+
                 // Update image
                 const imageContainer = card.querySelector('.product-image');
                 if (imageContainer) {
@@ -65,7 +72,8 @@
                         img.src = tileData.localImage;
                     }
 
-                    img.alt = tileData.title;
+                    // Optional "alt" field, falling back to the title (legacy behaviour).
+                    img.alt = tileData.alt || tileData.title || '';
                     img.style.display = 'block';
                 }
 

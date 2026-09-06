@@ -1,0 +1,19 @@
+# Dickson Antiquities Showcase Worker
+#
+# This file is a template. If you already deploy this Worker (dashboard or an
+# existing wrangler.toml), just copy the KV namespace id below and keep using
+# your current setup — the only code change is the added /showcase/status route.
+#
+# Secrets (never commit real values):
+#   npx wrangler secret put EBAY_CLIENT_ID
+#   npx wrangler secret put EBAY_CLIENT_SECRET
+
+name = "showcase"
+main = "worker.js"
+compatibility_date = "2024-11-01"
+
+# KV namespace for the OAuth token + per-item + per-status caches.
+# Find your existing id with:  npx wrangler kv namespace list
+[[kv_namespaces]]
+binding = "SHOWCASE_CACHE"
+id = "REPLACE_WITH_YOUR_EXISTING_SHOWCASE_CACHE_NAMESPACE_ID"
