@@ -3,11 +3,19 @@
  * Deploy to: https://showcase.andickso21.workers.dev
  *
  * Routes:
- *   GET /showcase          Public. Random sample of active items for the site.
- *                          UNCHANGED — same logic, same response contract.
+ *   GET /showcase          Public. Random sample of ACTIVE curated items. Draws
+ *                          replacement candidates past sold/ended listings until
+ *                          it has up to 6 valid items or the list is exhausted.
+ *                          Response contract unchanged: { items: [ … ] }.
  *   GET /showcase/status   Admin. Availability of every curated item id.
  *                          ?ids=<comma-separated> optional; defaults to the full
  *                          list in the deployed showcase.json.
+ *
+ * Both routes share one availability classifier and one KV cache:
+ *   ebay_status_v2_<id>  verdict string ('active' | 'unavailable'), short TTL
+ *   ebay_item_<id>       normalized display fields, 1 h TTL
+ * The admin sweep pre-warms both, so a public hit shortly after a sweep makes
+ * few or zero eBay calls. The public route also writes back what it learns.
  *
  * Availability classification (see classifyItemBody):
  *   A 200 from the eBay Browse API does NOT by itself mean "active" — eBay keeps
@@ -35,6 +43,8 @@ const STATUS_CACHE_ACTIVE_TTL = 900; // 15 min — short, so a transient stale "
 const STATUS_CACHE_UNAVAILABLE_TTL = 21600; // 6 hours (sold stays sold)
 const STATUS_CONCURRENCY = 4; // parallel eBay lookups — gentle enough to avoid stale burst responses
 const STATUS_MAX_IDS = 250; // hard cap on ids checked per request
+const PUBLIC_WANT = 6; // slots the public showcase tries to fill
+const MAX_PUBLIC_LOOKUPS = 18; // cap eBay calls for one cold public request
 const EBAY_TIMEOUT_MS = 8000;
 const RETRY_DELAY_MS = 400;
 // A verdict of `unverified` for one of these reasons is retried once.
@@ -146,57 +156,169 @@ function handlePreflight(request, url) {
   });
 }
 
-// ── /showcase (public) — original logic, unchanged ──────────────────────────
+// ── /showcase (public) ─────────────────────────────────────────────────────
 
 /**
- * Main logic: fetch showcase.json, select random items, get details
+ * Build the public showcase: up to PUBLIC_WANT active curated items, drawing
+ * replacements past sold/ended listings. Reuses cached availability + details
+ * from the admin sweep and its own prior runs; only calls eBay where a slot
+ * still needs filling and the cache can't answer.
+ *
+ * Response contract is unchanged: { items: [ {id,title,price,currency,image,url} ] }.
  */
 async function getShowcaseItems(env, ctx) {
-  // 1. Fetch showcase.json from the website
-  const showcaseUrl = 'https://dicksonantiquities.com/showcase.json';
-  const showcaseResponse = await fetch(showcaseUrl);
-
+  const showcaseResponse = await fetch('https://dicksonantiquities.com/showcase.json');
   if (!showcaseResponse.ok) {
     throw new Error('Failed to fetch showcase.json');
   }
 
   const showcaseData = await showcaseResponse.json();
-  const allItemIds = showcaseData.itemIds || [];
-
+  const allItemIds = parseIdList(showcaseData.itemIds || []);
   if (allItemIds.length === 0) {
     return { items: [] };
   }
 
-  // 2. Select 6 random distinct items (or fewer if list is smaller)
-  const numToSelect = Math.min(6, allItemIds.length);
-  const selectedIds = selectRandomItems(allItemIds, numToSelect);
+  const want = Math.min(PUBLIC_WANT, allItemIds.length);
 
-  // 3. Get eBay OAuth token
-  const token = await getEbayToken(env, ctx);
-
-  // 4. Fetch item details for selected IDs
-  const items = [];
-  for (const itemId of selectedIds) {
-    try {
-      const itemData = await getItemDetails(itemId, token, env, ctx);
-      if (itemData) {
-        items.push(itemData);
-      }
-    } catch (error) {
-      console.error(`Failed to fetch item ${itemId}:`, error);
-      // Continue to next item
-    }
+  // eBay OAuth token. If it fails we still serve whatever the cache covers.
+  let token = null;
+  try {
+    token = await getEbayToken(env, ctx);
+  } catch (err) {
+    console.error('Showcase: eBay token unavailable:', err.message);
   }
 
-  return { items };
+  // Cached availability for the whole curated list — KV reads only, no eBay.
+  const cachedStatus = {};
+  if (env.SHOWCASE_CACHE) {
+    await Promise.all(
+      allItemIds.map(async (id) => {
+        cachedStatus[id] = await env.SHOWCASE_CACHE.get(`${STATUS_CACHE_PREFIX}${id}`).catch(() => null);
+      })
+    );
+  }
+
+  // Known-active first (fewest live lookups), then unknowns; known-unavailable
+  // are never candidates. Randomised within each group.
+  const candidates = publicCandidateOrder(allItemIds, cachedStatus);
+
+  const active = [];
+  const spare = []; // renderable but unverified — used only to backfill
+  let lookups = 0;
+
+  for (const id of candidates) {
+    if (active.length >= want) break;
+
+    // Fast path: cache already holds the verdict AND the display fields.
+    if (cachedStatus[id] === 'active' && env.SHOWCASE_CACHE) {
+      const detail = await env.SHOWCASE_CACHE.get(`${ITEMS_CACHE_PREFIX}${id}`, 'json').catch(() => null);
+      if (detail && detail.id) {
+        active.push(detail);
+        continue;
+      }
+    }
+
+    if (!token || lookups >= MAX_PUBLIC_LOOKUPS) continue;
+    lookups++;
+    const { verdict, item } = await resolveShowcaseItem(id, token, env, ctx);
+    if (verdict === 'active' && item) active.push(item);
+    else if (verdict === 'unverified' && item) spare.push(item);
+    // 'unavailable' (or no renderable body) → slot not consumed
+  }
+
+  return { items: assembleShowcase(active, spare, want) };
 }
 
 /**
- * Select N random distinct items from array
+ * Candidate order for filling public slots. Pure.
+ * Known-unavailable ids are dropped; known-active come first; each group shuffled.
  */
-function selectRandomItems(array, n) {
+function publicCandidateOrder(allItemIds, cachedStatus, shuffle = selectRandomItems) {
+  const known = shuffle(allItemIds.filter((id) => cachedStatus[id] === 'active'), allItemIds.length);
+  const unknown = shuffle(allItemIds.filter((id) => !cachedStatus[id]), allItemIds.length);
+  return known.concat(unknown);
+}
+
+/**
+ * Final slot assembly. Pure. Active items fill first; unverified-but-renderable
+ * items backfill only if active runs short; never more than `want`.
+ */
+function assembleShowcase(active, spare, want) {
+  const out = active.slice(0, want);
+  for (const s of spare) {
+    if (out.length >= want) break;
+    out.push(s);
+  }
+  return out;
+}
+
+/** Select N random items from an array (N defaults to the whole array = shuffle). */
+function selectRandomItems(array, n = array.length) {
   const shuffled = [...array].sort(() => Math.random() - 0.5);
   return shuffled.slice(0, n);
+}
+
+/**
+ * One eBay lookup for the public route: classify availability AND extract the
+ * display fields from the same response, caching both. Returns { verdict, item }.
+ */
+async function resolveShowcaseItem(itemId, token, env, ctx) {
+  let response;
+  try {
+    response = await fetchWithTimeout(
+      `https://api.ebay.com/buy/browse/v1/item/v1|${itemId}|0`,
+      {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'X-EBAY-C-MARKETPLACE-ID': 'EBAY_US',
+          'X-EBAY-C-ENDUSERCTX': 'affiliateCampaignId=<ePNCampaignId>',
+        },
+      },
+      EBAY_TIMEOUT_MS
+    );
+  } catch {
+    return { verdict: 'unverified', item: null };
+  }
+
+  let body = null;
+  try {
+    body = await response.json();
+  } catch {
+    /* body stays null */
+  }
+
+  const verdict = classifyHttp(itemId, response.status, body).status;
+  if (verdict === 'active' || verdict === 'unavailable') {
+    cacheStatus(env, ctx, itemId, verdict);
+  }
+
+  let item = null;
+  if (response.status === 200 && body && (body.itemId || body.title)) {
+    item = normalizeItem(itemId, body);
+    cacheItem(env, ctx, itemId, item);
+  }
+  return { verdict, item };
+}
+
+/** Browse API body → the site's item shape. */
+function normalizeItem(itemId, data) {
+  return {
+    id: itemId,
+    title: data.title || 'Untitled',
+    price: data.price?.value || 0,
+    currency: data.price?.currency || 'USD',
+    image: data.image?.imageUrl || data.thumbnailImages?.[0]?.imageUrl || '',
+    url: data.itemWebUrl || `https://www.ebay.com/itm/${itemId}`,
+  };
+}
+
+function cacheItem(env, ctx, itemId, item) {
+  if (!env.SHOWCASE_CACHE) return;
+  ctx.waitUntil(
+    env.SHOWCASE_CACHE.put(`${ITEMS_CACHE_PREFIX}${itemId}`, JSON.stringify(item), {
+      expirationTtl: ITEM_CACHE_DURATION,
+    })
+  );
 }
 
 /**
@@ -246,61 +368,6 @@ async function getEbayToken(env, ctx) {
   }
 
   return token;
-}
-
-/**
- * Get item details from eBay Browse API (cached per item)
- */
-async function getItemDetails(itemId, token, env, ctx) {
-  const cacheKey = `${ITEMS_CACHE_PREFIX}${itemId}`;
-
-  // Check cache first
-  if (env.SHOWCASE_CACHE) {
-    const cached = await env.SHOWCASE_CACHE.get(cacheKey, 'json');
-    if (cached) {
-      return cached;
-    }
-  }
-
-  // Fetch from eBay
-  const response = await fetch(
-    `https://api.ebay.com/buy/browse/v1/item/v1|${itemId}|0`,
-    {
-      headers: {
-        Authorization: `Bearer ${token}`,
-        'X-EBAY-C-MARKETPLACE-ID': 'EBAY_US',
-        'X-EBAY-C-ENDUSERCTX': 'affiliateCampaignId=<ePNCampaignId>',
-      },
-    }
-  );
-
-  if (!response.ok) {
-    console.error(`eBay API error for item ${itemId}:`, response.status);
-    return null;
-  }
-
-  const data = await response.json();
-
-  // Normalize the data
-  const normalized = {
-    id: itemId,
-    title: data.title || 'Untitled',
-    price: data.price?.value || 0,
-    currency: data.price?.currency || 'USD',
-    image: data.image?.imageUrl || data.thumbnailImages?.[0]?.imageUrl || '',
-    url: data.itemWebUrl || `https://www.ebay.com/itm/${itemId}`,
-  };
-
-  // Cache the normalized item
-  if (env.SHOWCASE_CACHE) {
-    ctx.waitUntil(
-      env.SHOWCASE_CACHE.put(cacheKey, JSON.stringify(normalized), {
-        expirationTtl: ITEM_CACHE_DURATION,
-      })
-    );
-  }
-
-  return normalized;
 }
 
 // ── /showcase/status (admin) ────────────────────────────────────────────────
@@ -402,12 +469,12 @@ async function classifyItemId(itemId, token, env, ctx) {
     }
   }
 
-  let result = await lookupAndClassify(itemId, token);
+  let result = await lookupAndClassify(itemId, token, env, ctx);
 
   // One retry for a transient failure — never for a definitive verdict.
   if (result.status === 'unverified' && TRANSIENT_REASON.test(result.reason || '')) {
     await sleep(RETRY_DELAY_MS);
-    result = await lookupAndClassify(itemId, token);
+    result = await lookupAndClassify(itemId, token, env, ctx);
   }
 
   if (result.status === 'active' || result.status === 'unavailable') {
@@ -416,7 +483,7 @@ async function classifyItemId(itemId, token, env, ctx) {
   return result;
 }
 
-async function lookupAndClassify(itemId, token) {
+async function lookupAndClassify(itemId, token, env, ctx) {
   let response;
   try {
     response = await fetchWithTimeout(
@@ -432,7 +499,20 @@ async function lookupAndClassify(itemId, token) {
   } catch (err) {
     return { id: itemId, status: 'unverified', reason: err.name === 'AbortError' ? 'timeout' : 'network-error' };
   }
-  return classifyResponse(itemId, response);
+
+  let body = null;
+  try {
+    body = await response.json();
+  } catch {
+    /* body stays null */
+  }
+
+  // Pre-warm the details cache the public route reads (only for renderable bodies).
+  if (env && ctx && response.status === 200 && body && (body.itemId || body.title)) {
+    cacheItem(env, ctx, itemId, normalizeItem(itemId, body));
+  }
+
+  return classifyHttp(itemId, response.status, body);
 }
 
 function sleep(ms) {
@@ -440,38 +520,42 @@ function sleep(ms) {
 }
 
 /**
- * Classify one eBay Browse API response by HTTP status, then (for 200) by body.
- * `response` needs `.status` and an async `.json()`.
+ * Classify one eBay Browse API response object (needs `.status` + async `.json()`).
+ * Thin wrapper around classifyHttp — kept for the unit tests.
  */
 async function classifyResponse(itemId, response) {
-  const code = response.status;
+  let body = null;
+  try {
+    body = await response.json();
+  } catch {
+    /* body stays null */
+  }
+  return classifyHttp(itemId, response.status, body);
+}
 
+/**
+ * Classify from an HTTP status code + already-parsed body (or null).
+ *   200 + usable body → classifyItemBody
+ *   404 (errorId 11001/11002, or no body) → unavailable
+ *   anything else → unverified
+ */
+function classifyHttp(itemId, code, body) {
   if (code === 200) {
-    let data;
-    try {
-      data = await response.json();
-    } catch {
+    if (body == null || typeof body !== 'object') {
       return { id: itemId, status: 'unverified', reason: 'bad-json' };
     }
-    return classifyItemBody(itemId, data);
+    return classifyItemBody(itemId, body);
   }
 
   if (code === 404) {
-    // eBay Browse API returns 404 + errorId 11001/11002 for removed items. A 404
-    // whose body carries a DIFFERENT error is treated as ambiguous.
+    const errors = Array.isArray(body && body.errors) ? body.errors : [];
     let firstErrorId = null;
-    try {
-      const body = await response.json();
-      const errors = Array.isArray(body && body.errors) ? body.errors : [];
-      if (errors.length) {
-        firstErrorId = errors[0].errorId ?? null;
-        const notFound = [11001, 11002];
-        if (!errors.some((e) => notFound.includes(Number(e.errorId)))) {
-          return { id: itemId, status: 'unverified', reason: `ebay-404-unexpected-${firstErrorId}` };
-        }
+    if (errors.length) {
+      firstErrorId = errors[0].errorId ?? null;
+      const notFound = [11001, 11002];
+      if (!errors.some((e) => notFound.includes(Number(e.errorId)))) {
+        return { id: itemId, status: 'unverified', reason: `ebay-404-unexpected-${firstErrorId}` };
       }
-    } catch {
-      // No / invalid body on a 404 is still eBay's "not found" for this endpoint.
     }
     return { id: itemId, status: 'unavailable', reason: firstErrorId ? `ebay-404-${firstErrorId}` : 'ebay-404' };
   }
@@ -598,7 +682,12 @@ async function fetchWithTimeout(url, options, ms) {
 
 // Exposed for unit tests (ignored by the Workers runtime).
 export {
+  getShowcaseItems,
+  publicCandidateOrder,
+  assembleShowcase,
+  normalizeItem,
   classifyResponse,
+  classifyHttp,
   classifyItemBody,
   availabilitySignal,
   endDateState,

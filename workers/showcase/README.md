@@ -5,17 +5,37 @@ availability check. Deployed at `https://showcase.andickso21.workers.dev`.
 
 ## Routes
 
-### `GET /showcase` — public, unchanged
+### `GET /showcase` — public
 
-Returns up to 6 random **active** items for the site:
+Returns up to 6 **active** items, chosen at random from the curated `showcase.json`
+allow-list. Response contract and CORS (`https://dicksonantiquities.com`) unchanged:
 
 ```json
 { "items": [ { "id", "title", "price", "currency", "image", "url" }, ... ] }
 ```
 
-Sold/ended items are silently dropped (eBay Browse API returns 404 → `getItemDetails`
-returns `null`). Response contract and CORS (`https://dicksonantiquities.com`) are
-untouched by the status route.
+**Slot filling.** Instead of picking exactly 6 ids and showing whatever survives,
+the route draws replacement candidates past sold/ended listings until it has 6
+active items (or the curated list is exhausted). It reuses the same classifier and
+KV caches as `/showcase/status`:
+
+1. Read `ebay_status_v2_<id>` for the whole list (KV only — no eBay calls).
+   Known-`unavailable` ids are dropped; known-`active` ids are tried first.
+2. For each candidate, if it is cached `active` **and** its `ebay_item_<id>`
+   details are cached → use it, zero eBay calls.
+3. Otherwise do one `getItem` call: that single response yields both a fresh
+   availability verdict and the display fields, and both are cached (so the
+   verdict also helps the admin sweep, and vice-versa).
+4. Stop at 6 active. If still short, backfill with `unverified`-but-renderable
+   items (ambiguous 200 bodies) — never with anything classified `unavailable`.
+
+Randomness is preserved (each group is shuffled); only curated ids are ever
+surfaced. Live lookups are capped at 18 per cold request. If the OAuth token
+can't be obtained, the route still serves whatever the cache fully covers rather
+than erroring.
+
+Because the admin sweep pre-warms both caches, a public hit shortly after a
+sweep typically makes **zero** eBay calls.
 
 ### `GET /showcase/status` — admin
 
@@ -62,15 +82,23 @@ The observed signature of a genuinely sold fixed-price listing: HTTP 200,
 CORS: the public origin plus `http://localhost[:port]` / `http://127.0.0.1[:port]`
 / `http://[::1][:port]` so the admin tool works when served locally.
 
-Reuses the existing OAuth token (KV `ebay_app_token`). Adds a short-lived
-per-status cache `ebay_status_v2_<id>` (15 min active / 6 h unavailable;
-`unverified` is never cached). eBay's Browse API occasionally serves a stale
-(pre-sale) body under a concurrent burst, so lookups run at low concurrency (4),
-a transient failure (timeout / network / 429 / 5xx) is retried once, and the
-short "active" TTL lets any stale "active" self-heal on the next check. The
-public route's `ebay_item_<id>` cache is **not** trusted for status — it stores
-any 200 body, sold listings included. The `_v2` suffix is bumped whenever the
-classification rules change so stale verdicts are never served.
+Reuses the existing OAuth token (KV `ebay_app_token`). Shared KV caches:
+
+- `ebay_status_v2_<id>` — verdict string, 15 min for `active` / 6 h for
+  `unavailable`; `unverified` is never cached. Written by **both** routes.
+- `ebay_item_<id>` — normalized display fields, 1 h. Written whenever either
+  route sees a renderable 200 body, so the admin sweep pre-warms the public
+  route's details.
+
+The `ebay_item_<id>` cache is **not** trusted as an availability signal (it
+stores any 200 body, sold listings included) — the public route only uses it for
+display, and only for ids independently known `active`.
+
+eBay's Browse API occasionally serves a stale (pre-sale) body under a concurrent
+burst, so status lookups run at low concurrency (4), a transient failure
+(timeout / network / 429 / 5xx) is retried once, and the short `active` TTL lets
+any stale `active` self-heal on the next check. The `_v2` suffix is bumped
+whenever the classification rules change so stale verdicts are never served.
 
 ## Deploy
 
@@ -89,5 +117,7 @@ node workers/showcase/test.mjs
 ```
 
 Covers the classification rules (200 → active, 404/11001 → unavailable, every
-ambiguous failure → unverified), `?ids=` parsing, CORS origin resolution, and
-count tallying.
+ambiguous failure → unverified), `?ids=` parsing, CORS origin resolution, count
+tallying, and the public fill logic (fills to 6 past sold candidates; zero eBay
+calls when the cache covers it; known-unavailable skipped; unverified backfill
+only; contract unchanged) with a mocked `fetch` + KV.

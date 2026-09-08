@@ -51,6 +51,28 @@
         return next;
     }
 
+    // Replace the id at position `i` in place (order preserved). Never mutates
+    // the input. Returns { ids, ok, reason, id?, oldId?, unchanged? }.
+    function replaceItemId(ids, i, raw) {
+        if (i < 0 || i >= ids.length) {
+            return { ids: ids.slice(), ok: false, reason: 'That row no longer exists.' };
+        }
+        var id = extractItemId(raw);
+        if (!id) {
+            return { ids: ids.slice(), ok: false, reason: 'That is not a recognisable eBay item ID.' };
+        }
+        if (id === ids[i]) {
+            return { ids: ids.slice(), ok: false, unchanged: true, id: id, oldId: id };
+        }
+        if (ids.indexOf(id) !== -1) {
+            return { ids: ids.slice(), ok: false, reason: 'Item ID ' + id + ' is already in the list.' };
+        }
+        var next = ids.slice();
+        var oldId = next[i];
+        next[i] = id;
+        return { ids: next, ok: true, id: id, oldId: oldId };
+    }
+
     // Exact on-disk shape: 2-space indent + trailing newline (matches showcase.json).
     function buildJSON(ids) {
         return JSON.stringify({ itemIds: ids }, null, 2) + '\n';
@@ -104,6 +126,7 @@
         extractItemId: extractItemId,
         isValidItemId: isValidItemId,
         addItemId: addItemId,
+        replaceItemId: replaceItemId,
         move: move,
         buildJSON: buildJSON,
         parseItemIds: parseItemIds,
@@ -130,6 +153,7 @@
     var statusMap = {};
     var statusPhase = 'idle';        // idle | checking | done | error
     var lastAutoCheckKey = null;
+    var editing = null;             // { index } while a row's ID is being edited
 
     var $list, $count, $badge, $status, $conflict, $newId;
     var $summary, $summaryCounts, $cleanseBtn, $recheckBtn;
@@ -293,6 +317,39 @@
         saveDraft();
     }
 
+    /* ---- Inline ID replace ---- */
+
+    function beginEdit(i) {
+        editing = { index: i };
+        render();
+    }
+
+    function cancelEdit() {
+        editing = null;
+        render();
+    }
+
+    function commitEdit(i, rawValue) {
+        var res = replaceItemId(ids, i, rawValue);
+        if (res.unchanged) { cancelEdit(); return; }
+        if (!res.ok) {
+            AC.status($status, res.reason, 'error');
+            return; // stay in edit mode so the value can be fixed
+        }
+
+        // Detach the old id's availability from the new id — it starts unchecked.
+        if (res.oldId && statusMap[res.oldId] && ids.indexOf(res.oldId) === -1) {
+            delete statusMap[res.oldId];
+        }
+        ids = res.ids;
+        editing = null;
+        render();
+        saveDraft();          // draft only — Save to Repository still the only write
+        updateSummary();
+        AC.status($status, 'Replaced ' + res.oldId + ' with ' + res.id +
+            ' in the draft. Re-check availability, then Save to Repository.', 'success');
+    }
+
     /* ---- Availability ---- */
 
     function maybeAutoCheck() {
@@ -390,26 +447,66 @@
         return { label: 'Unverified', cls: 'is-unverified', reason: st.reason || '' };
     }
 
+    function renderEditRow(id, i) {
+        var row = document.createElement('div');
+        row.className = 'id-row id-row--editing';
+        row.innerHTML =
+            '<span class="id-row__index">' + (i + 1) + '</span>' +
+            '<input class="id-row__edit" type="text" spellcheck="false" ' +
+                'aria-label="Replace eBay item ID" ' +
+                'placeholder="new eBay item ID — or paste a listing URL">' +
+            '<span class="id-row__actions">' +
+                '<button class="icon-btn" data-act="save-id" title="Replace ID">&#10003;</button>' +
+                '<button class="icon-btn" data-act="cancel-id" title="Cancel">&#10005;</button>' +
+            '</span>';
+        var input = row.querySelector('.id-row__edit');
+        input.value = id;
+        setTimeout(function () { input.focus(); input.select(); }, 0);
+        input.addEventListener('keydown', function (e) {
+            if (e.key === 'Enter') { e.preventDefault(); commitEdit(i, input.value); }
+            else if (e.key === 'Escape') { e.preventDefault(); cancelEdit(); }
+        });
+        // mousedown fires before the input's blur, so these always register
+        row.querySelector('[data-act="save-id"]').addEventListener('mousedown', function (e) {
+            e.preventDefault(); commitEdit(i, input.value);
+        });
+        row.querySelector('[data-act="cancel-id"]').addEventListener('mousedown', function (e) {
+            e.preventDefault(); cancelEdit();
+        });
+        input.addEventListener('blur', function () {
+            setTimeout(function () { if (editing && editing.index === i) cancelEdit(); }, 150);
+        });
+        return row;
+    }
+
     function render() {
         $count.textContent = ids.length + ' item ID' + (ids.length === 1 ? '' : 's') +
             '. Public order is randomised by the Worker, so ordering here is just for your own reference.';
         $list.innerHTML = '';
         ids.forEach(function (id, i) {
+            if (editing && editing.index === i) {
+                $list.appendChild(renderEditRow(id, i));
+                return;
+            }
             var s = rowStatus(id);
             var row = document.createElement('div');
             row.className = 'id-row' + (s.cls === 'is-sold' ? ' is-sold' : '');
             row.innerHTML =
                 '<span class="id-row__index">' + (i + 1) + '</span>' +
-                '<span class="id-row__id">' + id + '</span>' +
+                '<button type="button" class="id-row__id" data-act="edit" title="Click to replace this ID">' + id + '</button>' +
                 '<span class="id-row__status ' + s.cls + '"' + (s.reason ? ' title="' + s.reason + '"' : '') + '>' + s.label + '</span>' +
                 '<a class="id-row__link" href="https://www.ebay.com/itm/' + id + '" target="_blank" rel="noopener noreferrer">view&nbsp;&#8599;</a>' +
                 '<span class="id-row__actions">' +
+                    '<button class="icon-btn" data-act="edit" title="Replace ID">&#9998;</button>' +
                     '<button class="icon-btn" data-act="up" title="Move up">&#8593;</button>' +
                     '<button class="icon-btn" data-act="down" title="Move down">&#8595;</button>' +
                     '<button class="icon-btn icon-btn--danger" data-act="remove" title="Remove">&#10005;</button>' +
                 '</span>';
             row.querySelector('[data-act="up"]').disabled = (i === 0);
             row.querySelector('[data-act="down"]').disabled = (i === ids.length - 1);
+            row.querySelectorAll('[data-act="edit"]').forEach(function (el) {
+                el.addEventListener('click', function () { beginEdit(i); });
+            });
             row.querySelector('[data-act="up"]').addEventListener('click', function () { moveAt(i, -1); });
             row.querySelector('[data-act="down"]').addEventListener('click', function () { moveAt(i, 1); });
             row.querySelector('[data-act="remove"]').addEventListener('click', function () { removeAt(i); });

@@ -174,6 +174,66 @@ test('showcase: move reorders within bounds and is a no-op past the edges', func
     assert.deepStrictEqual(Showcase.move(['a', 'b', 'c'], 2, 1), ['a', 'b', 'c']);
 });
 
+/* ---------------- Showcase inline ID replace ---------------- */
+
+var RIDS = ['111111111111', '222222222222', '333333333333'];
+
+test('showcase: replaceItemId swaps a bare numeric ID in place (order preserved)', function () {
+    var r = Showcase.replaceItemId(RIDS, 1, '999999999999');
+    assert.strictEqual(r.ok, true);
+    assert.deepStrictEqual(r.ids, ['111111111111', '999999999999', '333333333333']);
+    assert.strictEqual(r.oldId, '222222222222');
+    assert.strictEqual(r.id, '999999999999');
+    assert.deepStrictEqual(RIDS, ['111111111111', '222222222222', '333333333333'], 'input not mutated');
+});
+
+test('showcase: replaceItemId extracts the ID from a pasted eBay URL', function () {
+    var r = Showcase.replaceItemId(RIDS, 0, 'https://www.ebay.com/itm/187370603142?hash=item2ba0');
+    assert.strictEqual(r.ok, true);
+    assert.strictEqual(r.ids[0], '187370603142');
+    assert.strictEqual(r.ids[1], '222222222222');
+    assert.strictEqual(r.ids[2], '333333333333');
+});
+
+test('showcase: replaceItemId rejects malformed values', function () {
+    var r = Showcase.replaceItemId(RIDS, 0, 'not-an-id');
+    assert.strictEqual(r.ok, false);
+    assert.deepStrictEqual(r.ids, RIDS);
+});
+
+test('showcase: replaceItemId rejects a duplicate of another row', function () {
+    var r = Showcase.replaceItemId(RIDS, 0, '333333333333');
+    assert.strictEqual(r.ok, false);
+    assert.ok(/already/.test(r.reason));
+});
+
+test('showcase: replaceItemId flags an unchanged value (same ID)', function () {
+    var r = Showcase.replaceItemId(RIDS, 0, '111111111111');
+    assert.strictEqual(r.ok, false);
+    assert.strictEqual(r.unchanged, true);
+});
+
+test('showcase: replacing an ID resets that row to "not checked" in the summary', function () {
+    var status = { '111111111111': { status: 'active' }, '222222222222': { status: 'unavailable' }, '333333333333': { status: 'active' } };
+    var r = Showcase.replaceItemId(RIDS, 1, '444444444444'); // was unavailable
+    assert.strictEqual(r.ok, true);
+    // the manager deletes the old id's entry; the new id has none
+    delete status[r.oldId];
+    var c = Showcase.summarize(r.ids, status);
+    assert.deepStrictEqual(c, { active: 2, unavailable: 0, unverified: 0, notChecked: 1, total: 3 });
+    assert.deepStrictEqual(Showcase.soldIds(r.ids, status), [], 'no confirmed-sold ids after the swap');
+});
+
+test('showcase: contract stays exact after a replace + build', function () {
+    var ids = Showcase.parseItemIds(JSON.parse(showcaseRaw));
+    var r = Showcase.replaceItemId(ids, 3, '424242424242');
+    assert.strictEqual(r.ok, true);
+    var out = Showcase.buildJSON(r.ids);
+    assert.strictEqual(out, JSON.stringify({ itemIds: r.ids }, null, 2) + '\n');
+    assert.deepStrictEqual(Object.keys(JSON.parse(out)), ['itemIds']);
+    assert.strictEqual(r.ids.length, ids.length, 'length unchanged');
+});
+
 test('showcase: buildJSON preserves the exact { itemIds: [...] } shape + trailing newline', function () {
     var ids = Showcase.parseItemIds(JSON.parse(showcaseRaw));
     var out = Showcase.buildJSON(ids);
@@ -245,13 +305,14 @@ test('showcase: contract still exact after a cleanse + build', function () {
     assert.deepStrictEqual(Object.keys(JSON.parse(out)), ['itemIds']);
 });
 
-test('worker: classification + CORS rules (delegated to workers/showcase/test.mjs)', function () {
-    // Guard that the worker source still exports the pieces the manager relies on.
+test('worker: contract guards (full behaviour tested in workers/showcase/test.mjs)', function () {
     var src = fs.readFileSync(path.join(repoRoot, 'workers', 'showcase', 'worker.js'), 'utf8');
     assert.ok(src.indexOf("url.pathname === '/showcase')") !== -1, 'public /showcase route preserved');
-    assert.ok(/url\.pathname === '\/showcase\/status'/.test(src), 'new /showcase/status route present');
+    assert.ok(/url\.pathname === '\/showcase\/status'/.test(src), '/showcase/status route present');
     assert.ok(/status: 'unverified', reason: `http-\$\{code\}`/.test(src), 'ambiguous HTTP -> unverified');
     assert.ok(/'Access-Control-Allow-Origin': 'https:\/\/dicksonantiquities\.com'/.test(src), 'public CORS unchanged');
+    assert.ok(/return \{ items: assembleShowcase\(/.test(src), 'public route fills slots via assembleShowcase');
+    assert.ok(/publicCandidateOrder\(allItemIds, cachedStatus\)/.test(src), 'public route draws from the curated list + cache');
 });
 
 /* ---------------- summary ---------------- */

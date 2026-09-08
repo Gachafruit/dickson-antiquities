@@ -43,6 +43,15 @@ Cleanse edits the local draft only — **Save to Repository** is still the only
 write. Requires the Worker in `workers/showcase/` to be deployed with the
 `/showcase/status` route (see its README).
 
+### Replacing a stale ID
+
+When a listing was ended and relisted under a new eBay number, click the ID (or
+the ✎ button) to edit it in place: type a bare item ID or paste a full eBay
+listing URL, then ✓ / Enter to commit (✕ / Esc to cancel). The row keeps its
+position; malformed values and duplicates are rejected; the row's availability
+resets to **Not checked** until the next check. Draft only — **Save to
+Repository** still writes `showcase.json`.
+
 ## Workflow
 
 1. Open a manager — current content loads automatically (from the connected repo
