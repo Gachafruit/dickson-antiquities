@@ -1,11 +1,13 @@
 {
-  "updatedAt": "2026-01-26T22:36:47.962Z",
+  "updatedAt": "2026-09-09T09:25:25.440Z",
   "tiles": [
     {
       "id": "T1",
       "title": "Antique Hsun-Ok Burmese Offering Vessel",
       "price": "$5,999",
       "url": "https://www.ebay.com/itm/187370603142?itmmeta=01KFQR4BMDQ2318TS15JKYPTYH&hash=item2ba0288286:g:0EAAAeSwPiRpClG1",
+      "alt": "",
+      "enabled": true,
       "mode": "remote",
       "localImage": "images/featured/T1.jpg",
       "remoteImage": "https://i.ebayimg.com/images/g/0EAAAeSwPiRpClG1/s-l1600.webp"
@@ -15,6 +17,8 @@
       "title": "Antique Victorian Solid Brass Cerberus Door Knocker – 11.5” Gothic Mythology",
       "price": "$549.00",
       "url": "https://ebay.us/m/QXmKdi",
+      "alt": "",
+      "enabled": true,
       "mode": "remote",
       "localImage": "images/featured/T2.jpg",
       "remoteImage": "https://i.ebayimg.com/images/g/lMAAAeSw8sRpGjX1/s-l1600.webp"
@@ -24,24 +28,30 @@
       "title": "Antique 19th Century French Japy Fréres Dragon Clock - Brass Body & Enamel Dial",
       "price": "$2,499.99",
       "url": "https://ebay.us/m/yvMxSv",
+      "alt": "",
+      "enabled": true,
       "mode": "remote",
       "localImage": "images/featured/T3.jpg",
       "remoteImage": "https://i.ebayimg.com/images/g/gGoAAeSwjNRpDOl5/s-l1600.webp"
     },
     {
       "id": "T4",
-      "title": "Vintage Swarovski 7552 Gold Hummingbird Crystal Figurine",
-      "price": "$225.00",
-      "url": "https://ebay.us/m/FHcFOw",
+      "title": "Fine Art Lamps Italian Porcelain Fish Sculpture - 17\" tall",
+      "price": "$549.95",
+      "url": "https://ebay.io/m/LO9XCB",
+      "alt": "Picture of a large ceramic fish on a black metal pedestal - a product of 1970s Italian decor trends",
+      "enabled": true,
       "mode": "remote",
       "localImage": "images/featured/T4.jpg",
-      "remoteImage": "https://i.ebayimg.com/images/g/3X4AAeSwR6VpGE8E/s-l1600.webp"
+      "remoteImage": "https://i.ebayimg.com/images/g/qCAAAeSwEjtqm-UQ/s-l1600.webp"
     },
     {
       "id": "T5",
       "title": "Antique 19th C. Peruvian 900 Silver & Gold Ciborium",
       "price": "$3,000.00",
       "url": "https://ebay.us/m/lQRQDE",
+      "alt": "",
+      "enabled": true,
       "mode": "remote",
       "localImage": "images/featured/T5.jpg",
       "remoteImage": "https://i.ebayimg.com/images/g/rSYAAeSwdaVo815w/s-l1600.webp"
@@ -51,6 +61,8 @@
       "title": "Antique 1800s Brass Lantaka Desk Cannon – Hand Finished Decorative Piece",
       "price": "$144.00",
       "url": "https://ebay.us/m/h3LQWi",
+      "alt": "",
+      "enabled": true,
       "mode": "remote",
       "localImage": "images/featured/T6.jpg",
       "remoteImage": "https://i.ebayimg.com/images/g/KO0AAeSwhk9o8eJm/s-l1600.webp"
@@ -60,6 +72,8 @@
       "title": "Antique Vista Alegre Porcelain Inkstand Inkwell Set Portugal Gold Trim",
       "price": "$314.00",
       "url": "https://ebay.us/m/3cpSLW",
+      "alt": "",
+      "enabled": true,
       "mode": "remote",
       "localImage": "images/featured/T7.jpg",
       "remoteImage": "https://i.ebayimg.com/images/g/Ft0AAeSw11NoySgn/s-l1600.webp"
@@ -69,6 +83,8 @@
       "title": "Antique Art Nouveau Wächtersbach Ceramic Tray, Bronze & Mahogany, Josef Olbrich",
       "price": "$329.00",
       "url": "https://ebay.us/m/ZYf7l1",
+      "alt": "",
+      "enabled": true,
       "mode": "remote",
       "localImage": "images/featured/T8.jpg",
       "remoteImage": "https://i.ebayimg.com/images/g/nKwAAeSwdvlpIkye/s-l1600.webp"
@@ -78,6 +94,8 @@
       "title": "Antique Greek/Roman Ritual Clay Tripod Bowl with Monkey Relief Lid",
       "price": "$159.00",
       "url": "https://ebay.us/m/aeIxdw",
+      "alt": "",
+      "enabled": true,
       "mode": "remote",
       "localImage": "images/featured/T9.jpg",
       "remoteImage": "https://i.ebayimg.com/images/g/E0kAAeSwqpdo2VYP/s-l1600.webp"
