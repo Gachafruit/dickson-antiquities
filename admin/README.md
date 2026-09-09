@@ -52,6 +52,25 @@ position; malformed values and duplicates are rejected; the row's availability
 resets to **Not checked** until the next check. Draft only — **Save to
 Repository** still writes `showcase.json`.
 
+### Session Changes / Undo
+
+The tab on the right edge opens the **Session Changes** panel — a running list
+(newest first) of every mutation this session: adds, removes, replacements, a
+cleanse (one grouped entry), and moves. It's an overlay (doesn't shrink the
+list), in-memory only, and not kept across a page reload. **Undo last change**
+walks the list backward one step at a time (Redo re-applies until you make a new
+edit). Undo restores the exact previous ID list; any re-introduced ID shows
+**Not checked** rather than a stale verdict. Undo/redo touch the draft only.
+
+### Capacity & layout
+
+The list is capped at **100 IDs** (a safety ceiling — the normal range is
+~30–40; adding past 100 is rejected). It renders only the IDs that exist, never
+empty slots. On wide screens a list of 14+ IDs splits into two visual columns
+(IDs 1..k down the left, k+1..n down the right); narrow screens stay single
+column. The split is presentation only — index numbers and every control operate
+on the real global order.
+
 ## Workflow
 
 1. Open a manager — current content loads automatically (from the connected repo
@@ -80,5 +99,7 @@ node workers/showcase/test.mjs   # Worker classification + CORS
 Covers the JSON contracts, file-set isolation (a Featured save never touches
 `showcase.json` and vice versa), image path derivation, the ZIP-path mirroring,
 draft-vs-repository conflict detection, the availability summary/cleanse logic
-(unverified is never batch-removed), and the Worker's active/unavailable/unverified
-classification.
+(unverified is never batch-removed), inline ID replacement, the session
+history / linear undo-redo stack, the 100-ID cap, the status-reconcile-on-undo
+rule, the two-column layout hook, and the Worker's classification + public
+slot-fill logic.

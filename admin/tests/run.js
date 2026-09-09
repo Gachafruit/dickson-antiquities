@@ -305,6 +305,135 @@ test('showcase: contract still exact after a cleanse + build', function () {
     assert.deepStrictEqual(Object.keys(JSON.parse(out)), ['itemIds']);
 });
 
+/* ---------------- Showcase session history / undo ---------------- */
+
+function seq(n, base) { var a = []; for (var i = 0; i < n; i++) a.push(String((base || 100000000000) + i)); return a; }
+
+test('history: add / remove / replace / move each create exactly one entry', function () {
+    var h = Showcase.makeHistory();
+    h.record('add', 'Added item ID 111111111111', ['a']);
+    h.record('remove', 'Removed item ID a', ['a', '111111111111']);
+    h.record('replace', 'Replaced item ID x → y', ['111111111111']);
+    h.record('move', 'Moved item ID y from position 1 → 2', ['111111111111', 'y']);
+    assert.strictEqual(h.entries().length, 4);
+    assert.deepStrictEqual(h.entries().map(function (e) { return e.kind; }), ['add', 'remove', 'replace', 'move']);
+});
+
+test('history: a cleanse of N ids is ONE grouped entry, not one per id', function () {
+    var h = Showcase.makeHistory();
+    h.record('cleanse', 'Cleansed 4 sold/unavailable listings', ['a', 'b', 'c', 'd', 'e', 'f']);
+    assert.strictEqual(h.entries().length, 1);
+    assert.strictEqual(h.entries()[0].kind, 'cleanse');
+    assert.ok(/Cleansed 4/.test(h.entries()[0].label));
+});
+
+test('history: undo restores the immediately previous full ID list', function () {
+    var h = Showcase.makeHistory();
+    h.record('add', 'Added 3', ['1', '2']);
+    var r = h.undo(['1', '2', '3']);
+    assert.deepStrictEqual(r.ids, ['1', '2']);
+    assert.strictEqual(r.label, 'Added 3');
+});
+
+test('history: repeated undo walks backward through every mutation', function () {
+    var h = Showcase.makeHistory();
+    var s0 = ['a', 'b'];
+    h.record('add', 'Added c', s0);          var s1 = ['a', 'b', 'c'];
+    h.record('add', 'Added d', s1);          var s2 = ['a', 'b', 'c', 'd'];
+    h.record('remove', 'Removed a', s2);     var s3 = ['b', 'c', 'd'];
+    var u1 = h.undo(s3); assert.deepStrictEqual(u1.ids, s2);
+    var u2 = h.undo(u1.ids); assert.deepStrictEqual(u2.ids, s1);
+    var u3 = h.undo(u2.ids); assert.deepStrictEqual(u3.ids, s0);
+    assert.strictEqual(h.undo(u3.ids), null, 'nothing left to undo');
+});
+
+test('history: redo re-applies, and a new mutation clears the redo stack', function () {
+    var h = Showcase.makeHistory();
+    h.record('add', 'Added c', ['a', 'b']);
+    var u = h.undo(['a', 'b', 'c']);       // -> ['a','b']
+    assert.strictEqual(h.canRedo(), true);
+    var rd = h.redo(u.ids);
+    assert.deepStrictEqual(rd.ids, ['a', 'b', 'c']);
+    // undo again, then a fresh mutation kills redo
+    h.undo(['a', 'b', 'c']);
+    h.record('add', 'Added z', ['a', 'b']);
+    assert.strictEqual(h.canRedo(), false);
+});
+
+test('history: undo/redo snapshots are copies — later mutation of ids does not corrupt them', function () {
+    var h = Showcase.makeHistory();
+    var live = ['a', 'b'];
+    h.record('add', 'Added c', live);
+    live.push('c'); live.push('MUTATED');
+    var r = h.undo(live);
+    assert.deepStrictEqual(r.ids, ['a', 'b']);
+});
+
+test('reconcileStatus: a move (same id set) keeps every verdict', function () {
+    var status = { a: { status: 'active' }, b: { status: 'unavailable' }, c: { status: 'active' } };
+    var out = Showcase.reconcileStatus(['a', 'b', 'c'], ['b', 'a', 'c'], status);
+    assert.deepStrictEqual(out, status);
+});
+
+test('reconcileStatus: a re-introduced id (undo of remove) gets NO carried-over status', function () {
+    // 'b' was removed then undo brings it back; its old "active" verdict must not follow it
+    var status = { a: { status: 'active' }, b: { status: 'active' }, c: { status: 'unavailable' } };
+    var out = Showcase.reconcileStatus(['a', 'c'], ['a', 'b', 'c'], status);
+    assert.deepStrictEqual(out, { a: { status: 'active' }, c: { status: 'unavailable' } });
+    assert.strictEqual(out.b, undefined, 'restored id b is unchecked');
+});
+
+test('reconcileStatus: undo of a replace — restored old id is unchecked, new id dropped', function () {
+    // replace X -> Y, then undo. prev list has Y, next list has X back.
+    var status = { X: { status: 'unavailable' }, Y: { status: 'active' }, k: { status: 'active' } };
+    var out = Showcase.reconcileStatus(['Y', 'k'], ['X', 'k'], status);
+    assert.deepStrictEqual(out, { k: { status: 'active' } });
+});
+
+/* ---------------- Showcase capacity ---------------- */
+
+test('capacity: MAX_IDS is 100', function () {
+    assert.strictEqual(Showcase.MAX_IDS, 100);
+});
+
+test('capacity: a list well past the old ~30 limit still accepts adds', function () {
+    var r = Showcase.addItemId(seq(45), '999999999999');
+    assert.strictEqual(r.added, true);
+    assert.strictEqual(r.ids.length, 46);
+});
+
+test('capacity: the 100th id is accepted', function () {
+    var r = Showcase.addItemId(seq(99), '999999999999');
+    assert.strictEqual(r.added, true);
+    assert.strictEqual(r.ids.length, 100);
+});
+
+test('capacity: adding a 101st id is rejected with a clear message', function () {
+    var r = Showcase.addItemId(seq(100), '999999999999');
+    assert.strictEqual(r.added, false);
+    assert.ok(/capped at 100/.test(r.reason), r.reason);
+    assert.deepStrictEqual(r.ids.length, 100, 'list unchanged');
+});
+
+test('capacity: buildJSON has no preallocated / empty entries — length matches ids', function () {
+    var ids = seq(34);
+    var parsed = JSON.parse(Showcase.buildJSON(ids));
+    assert.strictEqual(parsed.itemIds.length, 34);
+    assert.ok(parsed.itemIds.every(Boolean), 'no empty slots');
+});
+
+/* ---------------- Showcase two-column layout (CSS + JS hook) ---------------- */
+
+test('layout: JS toggles .id-list--columns only above the threshold; CSS has the responsive fallback', function () {
+    var js = fs.readFileSync(path.join(repoRoot, 'admin', 'showcase-manager.js'), 'utf8');
+    assert.ok(/COLUMN_MIN\s*=\s*14/.test(js), 'threshold defined');
+    assert.ok(/classList\.toggle\('id-list--columns', ids\.length >= COLUMN_MIN\)/.test(js), 'class toggled by real list length');
+
+    var css = fs.readFileSync(path.join(repoRoot, 'admin', 'admin.css'), 'utf8');
+    assert.ok(/@media \(min-width: 1000px\)[\s\S]*\.id-list--columns[\s\S]*column-count: 2/.test(css), 'two columns only on wide screens');
+    assert.ok(/break-inside: avoid/.test(css), 'rows are not split across columns');
+});
+
 test('worker: contract guards (full behaviour tested in workers/showcase/test.mjs)', function () {
     var src = fs.readFileSync(path.join(repoRoot, 'workers', 'showcase', 'worker.js'), 'utf8');
     assert.ok(src.indexOf("url.pathname === '/showcase')") !== -1, 'public /showcase route preserved');

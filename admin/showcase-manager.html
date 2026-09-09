@@ -53,6 +53,27 @@
         <div class="id-list" id="idList"></div>
     </div>
 
+    <!-- Session Changes: fixed right-edge drawer, overlays the page -->
+    <aside class="session-drawer" id="sessionDrawer" data-open="false">
+        <button class="session-drawer__tab" id="sessionTab" type="button"
+                aria-expanded="false" aria-controls="sessionPanel">
+            <span class="session-drawer__tab-label">Session Changes</span>
+            <span class="session-drawer__badge" id="sessionBadge" hidden>0</span>
+        </button>
+        <div class="session-drawer__panel" id="sessionPanel" role="region" aria-label="Session changes">
+            <div class="session-drawer__head">
+                <h2>Session Changes</h2>
+                <div class="session-drawer__actions">
+                    <button class="btn btn-secondary btn-sm" id="undoBtn" type="button" disabled>&#8617; Undo last change</button>
+                    <button class="btn btn-secondary btn-sm" id="redoBtn" type="button" disabled hidden>&#8618; Redo</button>
+                </div>
+            </div>
+            <p class="session-drawer__hint">Draft only — <strong>Save to Repository</strong> still writes <code>showcase.json</code>. This list is not kept after a page reload.</p>
+            <ol class="session-drawer__log" id="sessionLog"></ol>
+            <p class="session-drawer__empty" id="sessionEmpty">No changes yet this session.</p>
+        </div>
+    </aside>
+
     <script src="repo-fs.js"></script>
     <script src="admin-common.js"></script>
     <script src="showcase-manager.js"></script>

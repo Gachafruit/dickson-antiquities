@@ -17,6 +17,8 @@
     var REPO_PATH = 'showcase.json';
     var HTTP_URL = '/showcase.json';
     var STATUS_URL = 'https://showcase.andickso21.workers.dev/showcase/status';
+    var MAX_IDS = 100;      // safety ceiling — NOT a target; normal range is ~30-40
+    var COLUMN_MIN = 14;    // render the list in two columns only once it's this long (on wide screens)
 
     /* ---------------- Pure helpers (exported for tests) ---------------- */
 
@@ -38,6 +40,12 @@
         var id = extractItemId(raw);
         if (!id) return { ids: ids.slice(), added: false, reason: 'That is not a recognisable eBay item ID.' };
         if (ids.indexOf(id) !== -1) return { ids: ids.slice(), added: false, reason: 'Item ID ' + id + ' is already in the list.' };
+        if (ids.length >= MAX_IDS) {
+            return {
+                ids: ids.slice(), added: false,
+                reason: 'The Showcase list is capped at ' + MAX_IDS + ' item IDs. Remove or replace one before adding another.'
+            };
+        }
         return { ids: ids.concat([id]), added: true, id: id };
     }
 
@@ -122,6 +130,59 @@
         return parts.join(' · ');
     }
 
+    /* ---- session history + linear undo/redo (pure) ---- */
+
+    // Records each mutation as one entry plus a full pre-mutation ids snapshot.
+    // Undo/redo are linear: one step at a time; any new mutation clears redo.
+    function makeHistory() {
+        var log = [];        // chronological: { kind, label, ts }
+        var undoStack = [];   // { ids: [...], label }
+        var redoStack = [];   // { ids: [...], label }
+
+        function record(kind, label, beforeIds) {
+            log.push({ kind: kind, label: label, ts: Date.now() });
+            undoStack.push({ ids: beforeIds.slice(), label: label });
+            redoStack.length = 0;
+        }
+        function undo(currentIds) {
+            if (!undoStack.length) return null;
+            var entry = undoStack.pop();
+            redoStack.push({ ids: currentIds.slice(), label: entry.label });
+            log.push({ kind: 'undo', label: 'Undid — ' + entry.label, ts: Date.now() });
+            return { ids: entry.ids.slice(), label: entry.label };
+        }
+        function redo(currentIds) {
+            if (!redoStack.length) return null;
+            var entry = redoStack.pop();
+            undoStack.push({ ids: currentIds.slice(), label: entry.label });
+            log.push({ kind: 'redo', label: 'Redid — ' + entry.label, ts: Date.now() });
+            return { ids: entry.ids.slice(), label: entry.label };
+        }
+        return {
+            record: record,
+            undo: undo,
+            redo: redo,
+            canUndo: function () { return undoStack.length > 0; },
+            canRedo: function () { return redoStack.length > 0; },
+            entries: function () { return log.slice(); },   // chronological (oldest first)
+            count: function () { return log.length; }
+        };
+    }
+
+    // After an undo/redo (or any wholesale list swap), keep a per-id availability
+    // verdict ONLY for ids that were already present immediately before the
+    // change. Re-introduced ids get no status → they render "Not checked", and a
+    // verdict is never carried onto a different id (statusMap is id-keyed).
+    function reconcileStatus(prevIds, nextIds, statusMap) {
+        var prevSet = Object.create(null);
+        prevIds.forEach(function (id) { prevSet[id] = true; });
+        var out = {};
+        nextIds.forEach(function (id) {
+            if (prevSet[id] && statusMap[id]) out[id] = statusMap[id];
+        });
+        return out;
+    }
+
     var pure = {
         extractItemId: extractItemId,
         isValidItemId: isValidItemId,
@@ -133,7 +194,10 @@
         summarize: summarize,
         soldIds: soldIds,
         cleanse: cleanse,
-        formatSummary: formatSummary
+        formatSummary: formatSummary,
+        makeHistory: makeHistory,
+        reconcileStatus: reconcileStatus,
+        MAX_IDS: MAX_IDS
     };
 
     if (typeof module !== 'undefined' && module.exports) {
@@ -154,9 +218,14 @@
     var statusPhase = 'idle';        // idle | checking | done | error
     var lastAutoCheckKey = null;
     var editing = null;             // { index } while a row's ID is being edited
+    var history = makeHistory();    // session-scoped; reset on a wholesale list load
+    var drawerOpen = false;
+    var drawerPinned = false;
+    var hoverTimer = null;
 
     var $list, $count, $badge, $status, $conflict, $newId;
     var $summary, $summaryCounts, $cleanseBtn, $recheckBtn;
+    var $drawer, $tab, $panel, $sessionBadge, $sessionLog, $sessionEmpty, $undoBtn, $redoBtn;
 
     function init() {
         $list = document.getElementById('idList');
@@ -169,12 +238,20 @@
         $summaryCounts = document.getElementById('summaryCounts');
         $cleanseBtn = document.getElementById('cleanseBtn');
         $recheckBtn = document.getElementById('recheckBtn');
+        $drawer = document.getElementById('sessionDrawer');
+        $tab = document.getElementById('sessionTab');
+        $panel = document.getElementById('sessionPanel');
+        $sessionBadge = document.getElementById('sessionBadge');
+        $sessionLog = document.getElementById('sessionLog');
+        $sessionEmpty = document.getElementById('sessionEmpty');
+        $undoBtn = document.getElementById('undoBtn');
+        $redoBtn = document.getElementById('redoBtn');
 
         conflict = AC.mountConflictBanner($conflict, {
             onResume: function () { refreshBadge(); maybeAutoCheck(); },
             onLoadRepo: function () {
-                ids = repoSnap.slice();
-                render(); saveDraft(); setBadge(repoSource); maybeAutoCheck();
+                setIdsFromLoad(repoSnap.slice());
+                render(); saveDraft(); setBadge(repoSource); renderHistory(); maybeAutoCheck();
             }
         });
 
@@ -186,10 +263,111 @@
         $recheckBtn.addEventListener('click', function () { checkAvailability(true); });
         $cleanseBtn.addEventListener('click', cleanseSold);
 
+        wireDrawer();
+        renderHistory();
+
         AC.mountRepoBar(document.getElementById('repoBar'), {
             statusEl: $status,
             onChange: function () { loadAuthoritative(); }
         });
+    }
+
+    /* ---- Session Changes drawer ---- */
+
+    function setDrawer(open) {
+        drawerOpen = !!open;
+        $drawer.dataset.open = drawerOpen ? 'true' : 'false';
+        $tab.setAttribute('aria-expanded', drawerOpen ? 'true' : 'false');
+    }
+
+    function canHover() {
+        return typeof window.matchMedia === 'function' && window.matchMedia('(hover: hover)').matches;
+    }
+
+    function wireDrawer() {
+        $tab.addEventListener('click', function () {
+            drawerPinned = !drawerPinned;
+            setDrawer(drawerPinned);
+        });
+        [$tab, $panel].forEach(function (el) {
+            el.addEventListener('mouseenter', function () {
+                clearTimeout(hoverTimer);
+                if (canHover()) setDrawer(true);
+            });
+            el.addEventListener('mouseleave', function () {
+                if (drawerPinned || !canHover()) return;
+                hoverTimer = setTimeout(function () { setDrawer(false); }, 250);
+            });
+        });
+        document.addEventListener('click', function (e) {
+            if (drawerOpen && !$drawer.contains(e.target)) { drawerPinned = false; setDrawer(false); }
+        });
+        document.addEventListener('keydown', function (e) {
+            if (e.key === 'Escape' && drawerOpen) { drawerPinned = false; setDrawer(false); }
+        });
+        $undoBtn.addEventListener('click', doUndo);
+        $redoBtn.addEventListener('click', doRedo);
+    }
+
+    function renderHistory() {
+        var entries = history.entries();
+        $sessionBadge.textContent = String(entries.length);
+        $sessionBadge.hidden = entries.length === 0;
+        $undoBtn.disabled = !history.canUndo();
+        $redoBtn.disabled = !history.canRedo();
+        $redoBtn.hidden = !history.canRedo();
+        $sessionEmpty.hidden = entries.length > 0;
+
+        $sessionLog.innerHTML = '';
+        entries.slice().reverse().forEach(function (e) {
+            var t = new Date(e.ts);
+            var hh = ('0' + t.getHours()).slice(-2);
+            var mm = ('0' + t.getMinutes()).slice(-2);
+            var li = document.createElement('li');
+            li.className = 'session-log__item session-log__item--' + e.kind;
+            li.innerHTML = '<span class="session-log__time"></span><span class="session-log__label"></span>';
+            li.querySelector('.session-log__time').textContent = hh + ':' + mm;
+            li.querySelector('.session-log__label').textContent = e.label;
+            $sessionLog.appendChild(li);
+        });
+    }
+
+    function doUndo() {
+        var prev = ids;
+        var r = history.undo(ids);
+        if (!r) return;
+        ids = r.ids;
+        statusMap = reconcileStatus(prev, ids, statusMap);
+        editing = null;
+        render(); saveDraft(); updateSummary(); renderHistory();
+        AC.status($status, 'Undid: ' + r.label + '. Draft only — Save to Repository to apply.', 'info');
+    }
+
+    function doRedo() {
+        var prev = ids;
+        var r = history.redo(ids);
+        if (!r) return;
+        ids = r.ids;
+        statusMap = reconcileStatus(prev, ids, statusMap);
+        editing = null;
+        render(); saveDraft(); updateSummary(); renderHistory();
+        AC.status($status, 'Redid: ' + r.label + '.', 'info');
+    }
+
+    // Wholesale list load (initial, reload, conflict resolve): start a fresh
+    // session history whenever the list actually changes out from under it.
+    function setIdsFromLoad(newIds) {
+        if (!AC.deepEqual(ids, newIds)) history = makeHistory();
+        ids = newIds;
+    }
+
+    // Shared tail for every incremental mutation.
+    function afterMutation(message, type) {
+        render();
+        saveDraft();
+        updateSummary();
+        renderHistory();
+        if (message) AC.status($status, message, type || 'info');
     }
 
     function setBadge(kind) { AC.setBadge($badge, kind); }
@@ -208,8 +386,9 @@
 
             var draft = readDraft();
             if (!draft) {
-                ids = repoSnap.slice();
+                setIdsFromLoad(repoSnap.slice());
                 render();
+                renderHistory();
                 setBadge(res.source);
                 conflict.hide();
                 AC.status($status, 'Loaded ' + ids.length + ' item IDs from the ' +
@@ -218,8 +397,9 @@
                 return;
             }
 
-            ids = draft.itemIds.slice();
+            setIdsFromLoad(draft.itemIds.slice());
             render();
+            renderHistory();
             if (AC.deepEqual(ids, repoSnap)) {
                 setBadge(res.source);
                 conflict.hide();
@@ -233,13 +413,15 @@
         }).catch(function (err) {
             var draft = readDraft();
             if (draft) {
-                ids = draft.itemIds.slice();
+                setIdsFromLoad(draft.itemIds.slice());
                 render();
+                renderHistory();
                 setBadge('draft');
                 AC.status($status, 'Could not reach showcase.json (' + err.message + '). Showing your local draft.', 'warn');
             } else {
-                ids = [];
+                setIdsFromLoad([]);
                 render();
+                renderHistory();
                 setBadge('empty');
                 AC.status($status, 'Could not load showcase.json and no local draft exists. ' +
                     'Connect the repository or serve the site over http://localhost.', 'error');
@@ -294,27 +476,26 @@
             AC.status($status, res.reason, 'error');
             return;
         }
+        history.record('add', 'Added item ID ' + res.id, ids);
         ids = res.ids;
         $newId.value = '';
-        render();
-        saveDraft();
-        updateSummary();
-        AC.status($status, 'Added item ID ' + res.id + '. Re-check availability to include it.', 'success');
+        afterMutation('Added item ID ' + res.id + '. Re-check availability to include it.', 'success');
     }
 
     function removeAt(i) {
         var removed = ids[i];
+        history.record('remove', 'Removed item ID ' + removed, ids);
         ids = ids.slice(0, i).concat(ids.slice(i + 1));
-        render();
-        saveDraft();
-        updateSummary();
-        AC.status($status, 'Removed item ID ' + removed + '.', 'info');
+        afterMutation('Removed item ID ' + removed + '.', 'info');
     }
 
     function moveAt(i, delta) {
+        var target = i + delta;
+        if (target < 0 || target >= ids.length) return;
+        history.record('move', 'Moved item ID ' + ids[i] +
+            ' from position ' + (i + 1) + ' → ' + (target + 1), ids);
         ids = move(ids, i, delta);
-        render();
-        saveDraft();
+        afterMutation(null);
     }
 
     /* ---- Inline ID replace ---- */
@@ -337,16 +518,16 @@
             return; // stay in edit mode so the value can be fixed
         }
 
+        history.record('replace', 'Replaced item ID ' + res.oldId + ' → ' + res.id, ids);
+
         // Detach the old id's availability from the new id — it starts unchecked.
-        if (res.oldId && statusMap[res.oldId] && ids.indexOf(res.oldId) === -1) {
+        if (res.oldId && statusMap[res.oldId] && res.ids.indexOf(res.oldId) === -1) {
             delete statusMap[res.oldId];
         }
         ids = res.ids;
         editing = null;
-        render();
-        saveDraft();          // draft only — Save to Repository still the only write
-        updateSummary();
-        AC.status($status, 'Replaced ' + res.oldId + ' with ' + res.id +
+        // draft only — Save to Repository is still the only write
+        afterMutation('Replaced ' + res.oldId + ' with ' + res.id +
             ' in the draft. Re-check availability, then Save to Repository.', 'success');
     }
 
@@ -428,11 +609,10 @@
             'Active and unverified listings are kept. Nothing is written to showcase.json ' +
             'until you Save to Repository.')) return;
 
+        history.record('cleanse', 'Cleansed ' + sold.length + ' sold/unavailable listing' +
+            (sold.length === 1 ? '' : 's'), ids);
         ids = cleanse(ids, statusMap);
-        render();
-        saveDraft();
-        updateSummary();
-        AC.status($status, 'Removed ' + sold.length + ' sold listing' + (sold.length === 1 ? '' : 's') +
+        afterMutation('Removed ' + sold.length + ' sold listing' + (sold.length === 1 ? '' : 's') +
             ' from the draft. Save to Repository to apply.', 'success');
     }
 
@@ -482,6 +662,9 @@
     function render() {
         $count.textContent = ids.length + ' item ID' + (ids.length === 1 ? '' : 's') +
             '. Public order is randomised by the Worker, so ordering here is just for your own reference.';
+        // Two visual columns on wide screens once the list is long enough to
+        // benefit (CSS media query does the actual narrow-screen fallback).
+        $list.classList.toggle('id-list--columns', ids.length >= COLUMN_MIN);
         $list.innerHTML = '';
         ids.forEach(function (id, i) {
             if (editing && editing.index === i) {
