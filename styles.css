@@ -908,7 +908,8 @@ button {
 
 /* ============================================
    SHOWCASE SECTION
-   Vertical list display for rotating collection
+   "From Our Collection" - 12 rotating curated listings.
+   Single column by default; two balanced columns on wide desktop.
    ============================================ */
 
 .showcase-section {
@@ -916,13 +917,32 @@ button {
     border-top: 1px solid var(--warm-gray);
 }
 
-/* Showcase List - Vertical Layout */
+/* Showcase List - single column (tablet / narrow desktop) */
 .showcase-list {
     display: flex;
     flex-direction: column;
     gap: 1rem;
     max-width: 900px;
     margin: 0 auto;
+}
+
+/* Wide desktop: two balanced columns of six. CSS multi-column keeps the DOM in
+   one logical order (items 1..k flow down the left column, k+1..n down the
+   right) and each card keeps its existing horizontal layout. The list widens
+   toward the section container so it visually matches Featured / Instagram. */
+@media (min-width: 1025px) {
+    .showcase-list {
+        display: block;
+        max-width: 1180px;
+        column-count: 2;
+        column-gap: 2.5rem;
+    }
+
+    .showcase-item {
+        margin-bottom: 1rem; /* column-count ignores flex `gap` */
+        break-inside: avoid;
+        -webkit-column-break-inside: avoid;
+    }
 }
 
 /* Individual Showcase Item */

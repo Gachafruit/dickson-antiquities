@@ -439,9 +439,12 @@ test('worker: contract guards (full behaviour tested in workers/showcase/test.mj
     assert.ok(src.indexOf("url.pathname === '/showcase')") !== -1, 'public /showcase route preserved');
     assert.ok(/url\.pathname === '\/showcase\/status'/.test(src), '/showcase/status route present');
     assert.ok(/status: 'unverified', reason: `http-\$\{code\}`/.test(src), 'ambiguous HTTP -> unverified');
-    assert.ok(/'Access-Control-Allow-Origin': 'https:\/\/dicksonantiquities\.com'/.test(src), 'public CORS unchanged');
+    assert.ok(/function resolveCorsOrigin/.test(src) && /localhost\(:\\d\+\)\?/.test(src), 'loopback-aware CORS allow-list present');
+    assert.ok(/const cors = corsHeaders\(request\.headers\.get\('Origin'\)\)/.test(src), '/showcase route uses the shared CORS helper');
     assert.ok(/return \{ items: assembleShowcase\(/.test(src), 'public route fills slots via assembleShowcase');
     assert.ok(/publicCandidateOrder\(allItemIds, cachedStatus\)/.test(src), 'public route draws from the curated list + cache');
+    assert.ok(/const PUBLIC_WANT = 12;/.test(src), 'public target is 12');
+    assert.ok(/Phase 1: cache only — no eBay calls/.test(src), 'cache-first phase 1 preserved');
 });
 
 /* ---------------- summary ---------------- */

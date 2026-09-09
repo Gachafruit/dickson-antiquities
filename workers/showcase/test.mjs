@@ -1,7 +1,7 @@
 /* Showcase Worker unit tests.  node workers/showcase/test.mjs */
 
 import assert from 'node:assert';
-import {
+import worker, {
   getShowcaseItems,
   publicCandidateOrder,
   assembleShowcase,
@@ -15,6 +15,8 @@ import {
   parseIdsParam,
   resolveCorsOrigin,
 } from './worker.js';
+
+const PUBLIC_WANT = 12;
 
 /* ---- sequential runner (so a test may stub globalThis.fetch safely) ---- */
 const tests = [];
@@ -112,12 +114,16 @@ test('parseIdsParam: valid numeric ids only, deduped, order kept', () => {
 test('parseIdList tolerates numbers and stray whitespace', () => {
   assert.deepStrictEqual(parseIdList([187370603142, ' 187860554164 ', '', null]), ['187370603142', '187860554164']);
 });
-test('resolveCorsOrigin: public site + loopback allowed, others rejected', () => {
+test('resolveCorsOrigin: production + www + every loopback form allowed; others rejected', () => {
   assert.strictEqual(resolveCorsOrigin('https://dicksonantiquities.com'), 'https://dicksonantiquities.com');
+  assert.strictEqual(resolveCorsOrigin('https://www.dicksonantiquities.com'), 'https://www.dicksonantiquities.com');
   assert.strictEqual(resolveCorsOrigin('http://localhost:5500'), 'http://localhost:5500');
-  assert.strictEqual(resolveCorsOrigin('http://127.0.0.1:8080'), 'http://127.0.0.1:8080');
-  assert.strictEqual(resolveCorsOrigin(''), 'https://dicksonantiquities.com');
+  assert.strictEqual(resolveCorsOrigin('http://127.0.0.1:5500'), 'http://127.0.0.1:5500');
+  assert.strictEqual(resolveCorsOrigin('http://[::1]:5500'), 'http://[::1]:5500');
+  assert.strictEqual(resolveCorsOrigin(''), 'https://dicksonantiquities.com'); // no Origin → production
   assert.strictEqual(resolveCorsOrigin('https://evil.example'), null);
+  assert.strictEqual(resolveCorsOrigin('http://192.168.1.20:5500'), null); // arbitrary LAN not allowed
+  assert.strictEqual(resolveCorsOrigin('https://dicksonantiquities.com.evil.com'), null);
 });
 
 /* ================= public showcase fill ================= */
@@ -181,20 +187,20 @@ async function withFetch(handler, fn) {
   }
 }
 
-const jsonResponse = (status, body) => ({ ok: status < 400, status, json: async () => body, text: async () => JSON.stringify(body) });
-const ebayItemUrl = (id) => `https://api.ebay.com/buy/browse/v1/item/v1|${id}|0`;
+const jsonResponse = (status, body, extra = {}) => ({ ok: status < 400, status, json: async () => body, text: async () => JSON.stringify(body), ...extra });
 const ebayItemId = (url) => (url.match(/item\/v1\|(\d+)\|0/) || [])[1];
 
-const CURATED = ['10000000001', '10000000002', '10000000003', '10000000004', '10000000005', '10000000006', '10000000007', '10000000008'];
+// 20 curated ids so want = min(12, 20) = 12
+const CURATED = Array.from({ length: 20 }, (_, i) => '1000000000' + String(10 + i));
+const liveBody = (id) => ({ itemId: 'v1|' + id + '|0', title: 'Live ' + id, price: { value: '10.00', currency: 'USD' }, image: { imageUrl: 'img' }, itemWebUrl: 'w', estimatedAvailabilities: [{ estimatedAvailabilityStatus: 'IN_STOCK', estimatedAvailableQuantity: 1 }] });
+const soldBody = (id) => ({ itemId: 'v1|' + id + '|0', title: 'Sold ' + id, itemEndDate: past, estimatedAvailabilities: [{ estimatedAvailabilityStatus: 'OUT_OF_STOCK', estimatedAvailableQuantity: 0 }] });
 
-test('public: 6 active served entirely from cache → ZERO eBay item calls', async () => {
+test('public: 12 active served entirely from cache → ZERO eBay item + token calls', async () => {
   const ctx = mockCtx();
-  const seed = {
-    ebay_app_token: 'TExisting',
-  };
-  // first 6 curated ids cached active + details; rest cached unavailable
+  const seed = { ebay_app_token: 'TExisting' };
+  // 14 cached active w/ details, rest cached unavailable
   CURATED.forEach((id, i) => {
-    if (i < 6) {
+    if (i < 14) {
       seed[`ebay_status_v2_${id}`] = 'active';
       seed[`ebay_item_${id}`] = JSON.stringify({ id, title: 'Item ' + id, price: 1, currency: 'USD', image: 'x', url: 'u' });
     } else {
@@ -211,81 +217,110 @@ test('public: 6 active served entirely from cache → ZERO eBay item calls', asy
   }, async (getCalls) => {
     const result = await getShowcaseItems(env, ctx);
     await ctx.settle();
-    assert.strictEqual(result.items.length, 6, 'filled 6 slots');
-    const ebayCalls = getCalls().filter((u) => ebayItemId(u));
-    assert.strictEqual(ebayCalls.length, 0, 'no eBay item lookups: ' + ebayCalls.length);
+    assert.strictEqual(result.items.length, 12, 'filled 12 slots');
+    assert.strictEqual(getCalls().filter((u) => ebayItemId(u)).length, 0, 'zero eBay item lookups');
     return result;
   });
-  // contract shape
   out.items.forEach((it) => assert.deepStrictEqual(Object.keys(it).sort(), ['currency', 'id', 'image', 'price', 'title', 'url']));
 });
 
-test('public: sold candidates are skipped and replaced until 6 active found', async () => {
+test('public: cold cache fills to 12, skipping sold, drawing replacements, caching verdicts back', async () => {
   const ctx = mockCtx();
-  // Nothing cached — everything must be looked up live.
   const env = { SHOWCASE_CACHE: mockKV({ ebay_app_token: 'T' }) };
-
-  // ids ...002 and ...005 are sold (past end date); the rest active.
-  const sold = new Set(['10000000002', '10000000005']);
+  // exactly 16 curated: 4 sold, 12 live → every id must be checked to fill 12
+  const pool = Array.from({ length: 16 }, (_, i) => '4000000000' + String(10 + i));
+  const sold = new Set([pool[2], pool[5], pool[9], pool[13]]);
   const out = await withFetch((url) => {
-    if (url.endsWith('/showcase.json')) return jsonResponse(200, { itemIds: CURATED });
+    if (url.endsWith('/showcase.json')) return jsonResponse(200, { itemIds: pool });
     const id = ebayItemId(url);
-    if (id) {
-      const body = sold.has(id)
-        ? { itemId: 'v1|' + id + '|0', title: 'Sold ' + id, itemEndDate: past, estimatedAvailabilities: [{ estimatedAvailabilityStatus: 'OUT_OF_STOCK', estimatedAvailableQuantity: 0 }] }
-        : { itemId: 'v1|' + id + '|0', title: 'Live ' + id, price: { value: '10.00', currency: 'USD' }, image: { imageUrl: 'img' }, itemWebUrl: 'w', estimatedAvailabilities: [{ estimatedAvailabilityStatus: 'IN_STOCK', estimatedAvailableQuantity: 1 }] };
-      return jsonResponse(200, body);
-    }
-    throw new Error('unexpected fetch ' + url);
-  }, async () => {
-    const result = await getShowcaseItems(env, ctx);
+    if (id) return jsonResponse(200, sold.has(id) ? soldBody(id) : liveBody(id));
+    throw new Error('unexpected ' + url);
+  }, async (getCalls) => {
+    const r = await getShowcaseItems(env, ctx);
     await ctx.settle();
-    return result;
+    assert.strictEqual(r.items.length, 12, 'filled 12 despite 4 sold');
+    const shown = r.items.map((i) => i.id);
+    assert.ok([...sold].every((s) => !shown.includes(s)), 'no sold id shown');
+    assert.ok(getCalls().filter((u) => ebayItemId(u)).length <= 16, 'never checks more than the list');
+    return r;
   });
-
-  assert.strictEqual(out.items.length, 6, 'still filled 6 slots');
-  const shownIds = out.items.map((i) => i.id);
-  assert.ok(!shownIds.includes('10000000002') && !shownIds.includes('10000000005'), 'sold ids not shown');
-  // sold verdicts were written back to the status cache
-  assert.strictEqual(await env.SHOWCASE_CACHE.get('ebay_status_v2_10000000002'), 'unavailable');
+  for (const s of sold) {
+    assert.strictEqual(await env.SHOWCASE_CACHE.get('ebay_status_v2_' + s), 'unavailable', 'sold verdict cached back: ' + s);
+  }
 });
 
-test('public: known-unavailable in cache costs no eBay call', async () => {
+test('public: cold-request lookups are bounded by MAX_PUBLIC_LOOKUPS', async () => {
+  const ctx = mockCtx();
+  const env = { SHOWCASE_CACHE: mockKV({ ebay_app_token: 'T' }) };
+  // 40 curated, ALL sold — the route can never fill 12 and must stop at the cap
+  const pool = Array.from({ length: 40 }, (_, i) => '5000000000' + String(10 + i));
+  const out = await withFetch((url) => {
+    if (url.endsWith('/showcase.json')) return jsonResponse(200, { itemIds: pool });
+    const id = ebayItemId(url);
+    if (id) return jsonResponse(200, soldBody(id));
+    throw new Error('unexpected ' + url);
+  }, async (getCalls) => {
+    const r = await getShowcaseItems(env, ctx);
+    await ctx.settle();
+    assert.deepStrictEqual(r.items, [], 'nothing to show — all sold');
+    const n = getCalls().filter((u) => ebayItemId(u)).length;
+    assert.strictEqual(n, 30, 'lookups capped at exactly MAX_PUBLIC_LOOKUPS (30)');
+    return r;
+  });
+});
+
+test('public: known-unavailable in cache is never looked up', async () => {
   const ctx = mockCtx();
   const seed = { ebay_app_token: 'T' };
-  // 2 cached-unavailable, 6 unknown-but-live
-  CURATED.forEach((id, i) => { if (i < 2) seed[`ebay_status_v2_${id}`] = 'unavailable'; });
+  const dead = CURATED.slice(0, 3);
+  dead.forEach((id) => { seed[`ebay_status_v2_${id}`] = 'unavailable'; });
   const env = { SHOWCASE_CACHE: mockKV(seed) };
 
-  const out = await withFetch((url, _o, calls) => {
+  await withFetch((url) => {
     if (url.endsWith('/showcase.json')) return jsonResponse(200, { itemIds: CURATED });
     const id = ebayItemId(url);
     if (id) {
-      assert.ok(!['10000000001', '10000000002'].includes(id), 'never looks up a cached-unavailable id');
-      return jsonResponse(200, { itemId: 'v1|' + id + '|0', title: 't', price: { value: '1', currency: 'USD' }, itemWebUrl: 'w', estimatedAvailabilities: [{ estimatedAvailabilityStatus: 'IN_STOCK', estimatedAvailableQuantity: 1 }] });
+      assert.ok(!dead.includes(id), 'never looks up a cached-unavailable id: ' + id);
+      return jsonResponse(200, liveBody(id));
     }
     throw new Error('unexpected ' + url);
   }, async (getCalls) => {
     const r = await getShowcaseItems(env, ctx);
     await ctx.settle();
-    const ebayCalls = getCalls().filter((u) => ebayItemId(u));
-    assert.strictEqual(ebayCalls.length, 6, 'exactly 6 lookups for the 6 unknown live ids');
-    return r;
+    assert.strictEqual(r.items.length, 12);
+    assert.strictEqual(getCalls().filter((u) => ebayItemId(u)).length, 12, 'exactly 12 lookups (the dead 3 skipped)');
   });
-  assert.strictEqual(out.items.length, 6);
 });
 
-test('public: unverified items only backfill when active is short; never shows unavailable', async () => {
+test('public: returns < 12 ONLY when the viable curated pool is genuinely exhausted', async () => {
   const ctx = mockCtx();
   const env = { SHOWCASE_CACHE: mockKV({ ebay_app_token: 'T' }) };
-  const small = ['20000000001', '20000000002', '20000000003', '20000000004'];
-  // 1 active, 1 sold(404), 2 ambiguous(200 no signals)
+  const small = Array.from({ length: 10 }, (_, i) => '3000000000' + String(10 + i)); // only 10 curated
+  const sold = new Set([small[1], small[4], small[7]]); // 3 sold → 7 viable
   const out = await withFetch((url) => {
     if (url.endsWith('/showcase.json')) return jsonResponse(200, { itemIds: small });
     const id = ebayItemId(url);
-    if (id === '20000000001') return jsonResponse(200, { itemId: 'v1|' + id + '|0', title: 'Active', price: { value: '1', currency: 'USD' }, itemWebUrl: 'w', estimatedAvailabilities: [{ estimatedAvailabilityStatus: 'IN_STOCK', estimatedAvailableQuantity: 1 }] });
+    if (id) return jsonResponse(200, sold.has(id) ? soldBody(id) : liveBody(id));
+    throw new Error('unexpected ' + url);
+  }, async () => {
+    const r = await getShowcaseItems(env, ctx);
+    await ctx.settle();
+    return r;
+  });
+  assert.strictEqual(out.items.length, 7, 'exactly the 7 genuinely-viable items');
+  assert.ok(out.items.every((i) => !sold.has(i.id)));
+});
+
+test('public: unverified items only backfill a genuine shortfall; unavailable is never shown', async () => {
+  const ctx = mockCtx();
+  const env = { SHOWCASE_CACHE: mockKV({ ebay_app_token: 'T' }) };
+  const small = ['20000000001', '20000000002', '20000000003', '20000000004'];
+  const out = await withFetch((url) => {
+    if (url.endsWith('/showcase.json')) return jsonResponse(200, { itemIds: small });
+    const id = ebayItemId(url);
+    if (id === '20000000001') return jsonResponse(200, liveBody(id));
     if (id === '20000000002') return jsonResponse(404, { errors: [{ errorId: 11001 }] });
-    if (id) return jsonResponse(200, { itemId: 'v1|' + id + '|0', title: 'Ambiguous ' + id, price: { value: '2', currency: 'USD' }, itemWebUrl: 'w' });
+    if (id) return jsonResponse(200, { itemId: 'v1|' + id + '|0', title: 'Ambiguous ' + id, price: { value: '2', currency: 'USD' }, itemWebUrl: 'w' }); // no signals → unverified
     throw new Error('unexpected ' + url);
   }, async () => {
     const r = await getShowcaseItems(env, ctx);
@@ -293,32 +328,135 @@ test('public: unverified items only backfill when active is short; never shows u
     return r;
   });
   const ids = out.items.map((i) => i.id);
-  assert.ok(ids.includes('20000000001'), 'the one active item is shown');
+  assert.ok(ids.includes('20000000001'), 'the active item is shown');
   assert.ok(!ids.includes('20000000002'), 'the sold (404) item is never shown');
-  assert.strictEqual(out.items.length, 3, 'active + 2 unverified backfill (want=min(6,4)=4, only 3 renderable)');
+  assert.strictEqual(out.items.length, 3, 'active + 2 unverified backfill (want capped to the 4-id list, 3 renderable)');
 });
 
-test('public: token failure → serves what the cache covers, no throw', async () => {
+test('public: token failure → serves whatever the cache fully covers, no throw', async () => {
   const ctx = mockCtx();
-  const seed = {}; // no cached token
-  CURATED.slice(0, 4).forEach((id) => {
+  const seed = {};
+  CURATED.slice(0, 5).forEach((id) => {
     seed[`ebay_status_v2_${id}`] = 'active';
     seed[`ebay_item_${id}`] = JSON.stringify({ id, title: 't', price: 1, currency: 'USD', image: 'x', url: 'u' });
   });
   const env = { SHOWCASE_CACHE: mockKV(seed), EBAY_CLIENT_ID: '', EBAY_CLIENT_SECRET: '' };
-
   const out = await withFetch((url) => {
     if (url.endsWith('/showcase.json')) return jsonResponse(200, { itemIds: CURATED });
     if (url.includes('oauth2/token')) return jsonResponse(401, { error: 'nope' });
     if (ebayItemId(url)) throw new Error('must not call eBay without a token');
     throw new Error('unexpected ' + url);
-  }, async () => {
-    return getShowcaseItems(env, ctx);
-  });
-  assert.strictEqual(out.items.length, 4, 'served the 4 fully-cached active items');
+  }, async () => getShowcaseItems(env, ctx));
+  assert.strictEqual(out.items.length, 5, 'served the 5 fully-cached active items');
 });
 
-test('public: response contract unchanged — { items: [...] } only', async () => {
+test('public: randomised — the shown set varies across requests', async () => {
+  const ctx = mockCtx();
+  const seed = { ebay_app_token: 'T' };
+  CURATED.forEach((id) => {
+    seed[`ebay_status_v2_${id}`] = 'active';
+    seed[`ebay_item_${id}`] = JSON.stringify({ id, title: 't', price: 1, currency: 'USD', image: 'x', url: 'u' });
+  });
+  const env = { SHOWCASE_CACHE: mockKV(seed) };
+  const runs = [];
+  await withFetch((url) => {
+    if (url.endsWith('/showcase.json')) return jsonResponse(200, { itemIds: CURATED });
+    throw new Error('unexpected ' + url);
+  }, async () => {
+    for (let i = 0; i < 8; i++) runs.push((await getShowcaseItems(env, ctx)).items.map((x) => x.id).join(','));
+  });
+  runs.forEach((r) => assert.strictEqual(r.split(',').length, 12));
+  assert.ok(new Set(runs).size > 1, '12-of-20 selection is randomised across runs');
+});
+
+function warmEnv() {
+  const seed = { ebay_app_token: 'T' };
+  CURATED.forEach((id) => {
+    seed[`ebay_status_v2_${id}`] = 'active';
+    seed[`ebay_item_${id}`] = JSON.stringify({ id, title: 't', price: 1, currency: 'USD', image: 'x', url: 'u' });
+  });
+  return { SHOWCASE_CACHE: mockKV(seed) };
+}
+async function fetchShowcase(origin) {
+  const ctx = mockCtx();
+  const req = new Request('https://showcase.andickso21.workers.dev/showcase',
+    origin ? { headers: { Origin: origin } } : {});
+  const res = await withFetch((url) => {
+    if (url.endsWith('/showcase.json')) return jsonResponse(200, { itemIds: CURATED });
+    throw new Error('unexpected ' + url);
+  }, async () => worker.fetch(req, warmEnv(), ctx));
+  await ctx.settle();
+  return res;
+}
+
+test('public: /showcase — body contract, Content-Type and Cache-Control unchanged; Vary: Origin added', async () => {
+  const res = await fetchShowcase(); // no Origin
+  assert.strictEqual(res.status, 200);
+  assert.strictEqual(res.headers.get('Content-Type'), 'application/json');
+  assert.strictEqual(res.headers.get('Cache-Control'), 'public, max-age=1800');
+  assert.strictEqual(res.headers.get('Access-Control-Allow-Origin'), 'https://dicksonantiquities.com', 'no Origin → production');
+  assert.strictEqual(res.headers.get('Vary'), 'Origin');
+  const body = await res.json();
+  assert.deepStrictEqual(Object.keys(body), ['items']);
+  assert.strictEqual(body.items.length, 12);
+});
+
+for (const origin of [
+  'https://dicksonantiquities.com',
+  'https://www.dicksonantiquities.com',
+  'http://localhost:5500',
+  'http://127.0.0.1:5500',
+  'http://[::1]:5500',
+]) {
+  test(`public: /showcase echoes allowed Origin ${origin}`, async () => {
+    const res = await fetchShowcase(origin);
+    assert.strictEqual(res.headers.get('Access-Control-Allow-Origin'), origin);
+    assert.strictEqual(res.headers.get('Vary'), 'Origin');
+    assert.strictEqual(res.headers.get('Cache-Control'), 'public, max-age=1800');
+    assert.strictEqual((await res.json()).items.length, 12);
+  });
+}
+
+test('public: /showcase does NOT echo a disallowed Origin (no wildcard, no LAN)', async () => {
+  for (const bad of ['https://evil.example', 'http://192.168.1.50:5500', 'http://localhost.evil.com']) {
+    const res = await fetchShowcase(bad);
+    assert.strictEqual(res.headers.get('Access-Control-Allow-Origin'), null, bad + ' must not be echoed');
+    assert.notStrictEqual(res.headers.get('Access-Control-Allow-Origin'), '*');
+    assert.strictEqual((await res.json()).items.length, 12, 'body still produced (browser enforces the block)');
+  }
+});
+
+test('public: /showcase OPTIONS preflight is loopback-aware (204 + echoed Origin + Vary + methods)', async () => {
+  const ctx = mockCtx();
+  const res = await worker.fetch(
+    new Request('https://showcase.andickso21.workers.dev/showcase', { method: 'OPTIONS', headers: { Origin: 'http://127.0.0.1:5500' } }),
+    warmEnv(), ctx
+  );
+  assert.strictEqual(res.status, 204);
+  assert.strictEqual(res.headers.get('Access-Control-Allow-Origin'), 'http://127.0.0.1:5500');
+  assert.strictEqual(res.headers.get('Vary'), 'Origin');
+  assert.strictEqual(res.headers.get('Access-Control-Allow-Methods'), 'GET, OPTIONS');
+  assert.strictEqual(res.headers.get('Access-Control-Max-Age'), '86400');
+});
+
+test('admin: /showcase/status CORS + contract unchanged (still loopback-aware)', async () => {
+  const ctx = mockCtx();
+  // 3 ids, all seeded 'active' in KV → handler makes no outgoing fetch at all
+  const res = await withFetch(() => { throw new Error('no outgoing fetch expected'); },
+    async () => worker.fetch(
+      new Request('https://showcase.andickso21.workers.dev/showcase/status?ids=' + CURATED.slice(0, 3).join(','),
+        { headers: { Origin: 'http://localhost:5500' } }),
+      warmEnv(), ctx
+    ));
+  await ctx.settle();
+  assert.strictEqual(res.headers.get('Access-Control-Allow-Origin'), 'http://localhost:5500');
+  assert.strictEqual(res.headers.get('Vary'), 'Origin');
+  const body = await res.json();
+  assert.ok(Array.isArray(body.statuses) && typeof body.total === 'number' && body.counts, 'status contract intact');
+  assert.strictEqual(body.statuses.length, 3);
+});
+
+test('public: empty curated list → { items: [] }', async () => {
   const ctx = mockCtx();
   const env = { SHOWCASE_CACHE: mockKV({ ebay_app_token: 'T' }) };
   const out = await withFetch((url) => {

@@ -5,8 +5,9 @@
  * Routes:
  *   GET /showcase          Public. Random sample of ACTIVE curated items. Draws
  *                          replacement candidates past sold/ended listings until
- *                          it has up to 6 valid items or the list is exhausted.
- *                          Response contract unchanged: { items: [ … ] }.
+ *                          it has up to 12 valid items or the list is exhausted.
+ *                          Response contract unchanged: { items: [ … ] }. CORS
+ *                          echoes the production site or any loopback dev origin.
  *   GET /showcase/status   Admin. Availability of every curated item id.
  *                          ?ids=<comma-separated> optional; defaults to the full
  *                          list in the deployed showcase.json.
@@ -39,12 +40,15 @@ const ITEMS_CACHE_PREFIX = 'ebay_item_';
 const STATUS_CACHE_PREFIX = 'ebay_status_v2_';
 const TOKEN_CACHE_DURATION = 7000; // ~2 hours (eBay tokens expire at 7200s)
 const ITEM_CACHE_DURATION = 3600; // 1 hour per item
-const STATUS_CACHE_ACTIVE_TTL = 900; // 15 min — short, so a transient stale "active" self-heals
+const STATUS_CACHE_ACTIVE_TTL = 1800; // 30 min — matches the public browser cache; still short enough
+                                     // that a sold item is re-detected quickly (was 15 min)
 const STATUS_CACHE_UNAVAILABLE_TTL = 21600; // 6 hours (sold stays sold)
 const STATUS_CONCURRENCY = 4; // parallel eBay lookups — gentle enough to avoid stale burst responses
 const STATUS_MAX_IDS = 250; // hard cap on ids checked per request
-const PUBLIC_WANT = 6; // slots the public showcase tries to fill
-const MAX_PUBLIC_LOOKUPS = 18; // cap eBay calls for one cold public request
+const PUBLIC_WANT = 12; // slots the public showcase tries to fill (two desktop columns of six)
+const MAX_PUBLIC_LOOKUPS = 30; // cap eBay calls for one cold public request — enough headroom past
+                               // dead/unverified candidates to genuinely fill 12 from a ~30-id list
+const PUBLIC_CONCURRENCY = 4; // parallel eBay lookups in the cold-cache fill phase
 const EBAY_TIMEOUT_MS = 8000;
 const RETRY_DELAY_MS = 400;
 // A verdict of `unverified` for one of these reasons is retried once.
@@ -64,15 +68,19 @@ export default {
       return handlePreflight(request, url);
     }
 
-    // ── Public route — UNCHANGED ──────────────────────────────────────────
+    // ── Public route ─────────────────────────────────────────────────────
+    // Fill / cache / randomization logic is unchanged. CORS is now loopback-aware
+    // (same allow-list as /showcase/status) so the layout can be tested locally
+    // against the real deployed Worker.
     if (request.method === 'GET' && url.pathname === '/showcase') {
+      const cors = corsHeaders(request.headers.get('Origin'));
       try {
         const result = await getShowcaseItems(env, ctx);
         return new Response(JSON.stringify(result), {
           headers: {
             'Content-Type': 'application/json',
-            'Access-Control-Allow-Origin': 'https://dicksonantiquities.com',
             'Cache-Control': 'public, max-age=1800', // Cache in browser for 30 min
+            ...cors,
           },
         });
       } catch (error) {
@@ -84,10 +92,7 @@ export default {
           }),
           {
             status: 500,
-            headers: {
-              'Content-Type': 'application/json',
-              'Access-Control-Allow-Origin': 'https://dicksonantiquities.com',
-            },
+            headers: { 'Content-Type': 'application/json', ...cors },
           }
         );
       }
@@ -106,10 +111,12 @@ export default {
 // ── CORS ────────────────────────────────────────────────────────────────────
 
 /**
- * Which Access-Control-Allow-Origin to echo. The public site is always allowed;
- * the admin tool is additionally allowed from loopback origins so it works when
- * served via `npx serve` / `python -m http.server` on localhost / 127.0.0.1.
- * Returns null for a disallowed origin.
+ * Which Access-Control-Allow-Origin to echo. Allowed: the production site
+ * (with/without www) and any loopback dev origin (localhost / 127.0.0.1 / [::1],
+ * any port) so both the public route and the admin tool can be exercised from a
+ * local static server / Live Server. A request with no Origin header (curl,
+ * monitors, the site's own same-origin fetch) resolves to the production origin.
+ * Returns null for anything else — never a wildcard, never arbitrary LAN IPs.
  */
 function resolveCorsOrigin(origin) {
   if (!origin) return PUBLIC_ORIGIN;
@@ -121,7 +128,7 @@ function resolveCorsOrigin(origin) {
   return null;
 }
 
-function statusCorsHeaders(origin) {
+function corsHeaders(origin) {
   const allowed = resolveCorsOrigin(origin);
   const headers = {
     'Access-Control-Allow-Methods': 'GET, OPTIONS',
@@ -133,15 +140,15 @@ function statusCorsHeaders(origin) {
 }
 
 /**
- * Preflight. Only /showcase/status gets the dynamic (loopback-aware) response;
- * every other path keeps the original public-only preflight untouched.
+ * Preflight. /showcase and /showcase/status both get the loopback-aware
+ * response; any other path keeps the original public-only preflight.
  */
 function handlePreflight(request, url) {
-  if (url.pathname === '/showcase/status') {
+  if (url.pathname === '/showcase' || url.pathname === '/showcase/status') {
     return new Response(null, {
       status: 204,
       headers: {
-        ...statusCorsHeaders(request.headers.get('Origin')),
+        ...corsHeaders(request.headers.get('Origin')),
         'Access-Control-Max-Age': '86400',
       },
     });
@@ -163,6 +170,10 @@ function handlePreflight(request, url) {
  * replacements past sold/ended listings. Reuses cached availability + details
  * from the admin sweep and its own prior runs; only calls eBay where a slot
  * still needs filling and the cache can't answer.
+ *
+ * Two phases: (1) fill from cache only — zero eBay calls, the common case right
+ * after an admin sweep; (2) if still short, live-check the remaining candidates
+ * in bounded concurrent waves, stopping as soon as PUBLIC_WANT is reached.
  *
  * Response contract is unchanged: { items: [ {id,title,price,currency,image,url} ] }.
  */
@@ -204,12 +215,11 @@ async function getShowcaseItems(env, ctx) {
 
   const active = [];
   const spare = []; // renderable but unverified — used only to backfill
-  let lookups = 0;
 
+  // ── Phase 1: cache only — no eBay calls ──────────────────────────────────
+  const needsLookup = [];
   for (const id of candidates) {
     if (active.length >= want) break;
-
-    // Fast path: cache already holds the verdict AND the display fields.
     if (cachedStatus[id] === 'active' && env.SHOWCASE_CACHE) {
       const detail = await env.SHOWCASE_CACHE.get(`${ITEMS_CACHE_PREFIX}${id}`, 'json').catch(() => null);
       if (detail && detail.id) {
@@ -217,13 +227,30 @@ async function getShowcaseItems(env, ctx) {
         continue;
       }
     }
+    needsLookup.push(id);
+  }
 
-    if (!token || lookups >= MAX_PUBLIC_LOOKUPS) continue;
-    lookups++;
-    const { verdict, item } = await resolveShowcaseItem(id, token, env, ctx);
-    if (verdict === 'active' && item) active.push(item);
-    else if (verdict === 'unverified' && item) spare.push(item);
-    // 'unavailable' (or no renderable body) → slot not consumed
+  // ── Phase 2: live lookups for whatever the cache couldn't fill ───────────
+  if (active.length < want && token) {
+    let lookups = 0;
+    for (
+      let i = 0;
+      i < needsLookup.length && active.length < want && lookups < MAX_PUBLIC_LOOKUPS;
+      i += PUBLIC_CONCURRENCY
+    ) {
+      const wave = needsLookup
+        .slice(i, i + PUBLIC_CONCURRENCY)
+        .slice(0, MAX_PUBLIC_LOOKUPS - lookups);
+      lookups += wave.length;
+      const results = await Promise.all(
+        wave.map((id) => resolveShowcaseItem(id, token, env, ctx))
+      );
+      for (const { verdict, item } of results) {
+        if (verdict === 'active' && item) active.push(item);
+        else if (verdict === 'unverified' && item) spare.push(item);
+        // 'unavailable' (or no renderable body) → slot not consumed
+      }
+    }
   }
 
   return { items: assembleShowcase(active, spare, want) };
@@ -373,7 +400,7 @@ async function getEbayToken(env, ctx) {
 // ── /showcase/status (admin) ────────────────────────────────────────────────
 
 async function handleStatus(request, url, env, ctx) {
-  const cors = statusCorsHeaders(request.headers.get('Origin'));
+  const cors = corsHeaders(request.headers.get('Origin'));
   const json = (obj, status = 200) =>
     new Response(JSON.stringify(obj), {
       status,
