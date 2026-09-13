@@ -1,5 +1,5 @@
 {
-  "updatedAt": "2026-09-09T09:25:25.440Z",
+  "updatedAt": "2026-09-13T22:37:24.932Z",
   "tiles": [
     {
       "id": "T1",
@@ -14,14 +14,14 @@
     },
     {
       "id": "T2",
-      "title": "Antique Victorian Solid Brass Cerberus Door Knocker – 11.5” Gothic Mythology",
-      "price": "$549.00",
-      "url": "https://ebay.us/m/QXmKdi",
-      "alt": "",
+      "title": "Vintage ~1930s Curved Wood Teller Window Frame Architectural Salvage Bowed Sash",
+      "price": "$1,695.00",
+      "url": "https://ebay.io/m/BhlK8Q",
+      "alt": "Picture of a curved teller window sash made from wood.",
       "enabled": true,
       "mode": "remote",
       "localImage": "images/featured/T2.jpg",
-      "remoteImage": "https://i.ebayimg.com/images/g/lMAAAeSw8sRpGjX1/s-l1600.webp"
+      "remoteImage": "https://i.ebayimg.com/images/g/kY8AAeSwINFqpx1h/s-l1600.webp"
     },
     {
       "id": "T3",
