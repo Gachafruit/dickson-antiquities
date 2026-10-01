@@ -1,5 +1,5 @@
 {
-  "updatedAt": "2026-09-27T08:48:41.067Z",
+  "updatedAt": "2026-10-01T22:22:55.905Z",
   "tiles": [
     {
       "id": "T1",
@@ -91,14 +91,14 @@
     },
     {
       "id": "T9",
-      "title": "Antique Greek/Roman Ritual Clay Tripod Bowl with Monkey Relief Lid",
-      "price": "$159.00",
-      "url": "https://ebay.us/m/aeIxdw",
-      "alt": "",
+      "title": "Glenn Tingook Inuit Salmon Sculpture carved from Serpentine Stone",
+      "price": "$749",
+      "url": "https://ebay.io/m/vK2LWm",
+      "alt": "Picture showing a stone salmon carved by Inuit artisan Glenn Tingook",
       "enabled": true,
       "mode": "remote",
       "localImage": "images/featured/T9.jpg",
-      "remoteImage": "https://i.ebayimg.com/images/g/E0kAAeSwqpdo2VYP/s-l1600.webp"
+      "remoteImage": "https://i.ebayimg.com/images/g/xVsAAeSw1MJqvsiD/s-l1600.webp"
     }
   ]
 }
