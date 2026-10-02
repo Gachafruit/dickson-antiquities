@@ -1,5 +1,5 @@
 {
-  "updatedAt": "2026-10-02T00:30:13.309Z",
+  "updatedAt": "2026-10-02T21:37:31.264Z",
   "tiles": [
     {
       "id": "T1",
@@ -36,13 +36,13 @@
     },
     {
       "id": "T4",
-      "title": "Fine Art Lamps Italian Porcelain Fish Sculpture - 17\" tall",
-      "price": "$549.95",
-      "url": "https://ebay.io/m/LO9XCB",
-      "alt": "Picture of a large ceramic fish on a black metal pedestal - a product of 1970s Italian decor trends",
+      "title": "Hand Painted 21\" Italian Bassano Nove Porcelain 8-Light Chandelier",
+      "price": "$649.00",
+      "url": "https://ebay.io/m/3R66P9",
+      "alt": "Vintage Italian Bassano Nove porcelain eight-light chandelier with hand-painted floral decoration and ornate scrolling metal arms",
       "enabled": true,
-      "mode": "remote",
-      "localImage": "images/featured/T4.jpg",
+      "mode": "local",
+      "localImage": "images/featured/T4.png",
       "remoteImage": "https://i.ebayimg.com/images/g/qCAAAeSwEjtqm-UQ/s-l1600.webp"
     },
     {
