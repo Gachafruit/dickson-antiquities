@@ -1,5 +1,5 @@
 {
-  "updatedAt": "2026-10-02T00:27:13.969Z",
+  "updatedAt": "2026-10-02T00:30:13.309Z",
   "tiles": [
     {
       "id": "T1",
@@ -96,8 +96,8 @@
       "url": "https://ebay.io/m/vK2LWm",
       "alt": "Picture showing a stone salmon carved by Inuit artisan Glenn Tingook",
       "enabled": true,
-      "mode": "remote",
-      "localImage": "images/featured/T9.jpg",
+      "mode": "local",
+      "localImage": "images/featured/T9.png",
       "remoteImage": "https://i.ebayimg.com/images/g/xVsAAeSw1MJqvsiD/s-l1600.webp"
     }
   ]
