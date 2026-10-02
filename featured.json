@@ -1,5 +1,5 @@
 {
-  "updatedAt": "2026-10-01T22:22:55.905Z",
+  "updatedAt": "2026-10-02T00:27:13.969Z",
   "tiles": [
     {
       "id": "T1",
@@ -58,13 +58,13 @@
     },
     {
       "id": "T6",
-      "title": "Antique 1800s Brass Lantaka Desk Cannon – Hand Finished Decorative Piece",
-      "price": "$144.00",
-      "url": "https://ebay.us/m/h3LQWi",
-      "alt": "",
+      "title": "Vintage Italian Cockatoo Parrot Sculpture Silvered Brass Metal Bird 1970s",
+      "price": "$949.95",
+      "url": "https://ebay.io/m/Qtpn9C",
+      "alt": "Picture of a vintage 1970s silvered-brass cockatoo sculpture",
       "enabled": true,
-      "mode": "remote",
-      "localImage": "images/featured/T6.jpg",
+      "mode": "local",
+      "localImage": "images/featured/T6.png",
       "remoteImage": "https://i.ebayimg.com/images/g/KO0AAeSwhk9o8eJm/s-l1600.webp"
     },
     {
