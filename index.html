@@ -45,7 +45,7 @@
 
     <link rel="manifest" href="/site.webmanifest">
 
-    <link rel="stylesheet" href="styles.css?v=1.12">
+    <link rel="stylesheet" href="styles.css?v=1.13">
     <!-- Google Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -234,6 +234,17 @@
                     <p class="product-price">$1,250.00</p>
                     <a href="#" class="product-link">View on eBay</a>
                 </article>
+
+                <!-- T10: mobile-only. Shown only while the grid is two columns, and
+                     only once featured-loader.js has complete data for it. -->
+                <article class="product-card product-card--mobile-only" hidden>
+                    <div class="product-image">
+                        <div class="placeholder-img">Product Image</div>
+                    </div>
+                    <h3 class="product-title"></h3>
+                    <p class="product-price"></p>
+                    <a href="#" class="product-link">View on eBay</a>
+                </article>
             </div>
 
             <!-- REPLACE: Update href with your eBay store URL -->
@@ -403,7 +414,7 @@
 
     <script src="script.js?v=1"></script>
 
-    <script src="featured-loader.js?v=1"></script>
+    <script src="featured-loader.js?v=2"></script>
 
     <script src="showcase-loader.js?v=1"></script>
 

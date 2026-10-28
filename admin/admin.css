@@ -369,6 +369,24 @@ body {
 
 .tile-id { font-size: 1.05rem; font-weight: 700; color: var(--brass); }
 
+.tile-editor--mobile-only { border-style: dashed; }
+.tile-badge {
+    display: inline-block;
+    margin-left: 0.4rem;
+    padding: 0.1rem 0.5rem;
+    border: 1px solid var(--brass-light);
+    border-radius: 999px;
+    font-size: 0.72rem;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+    vertical-align: middle;
+}
+.tile-note {
+    margin: -0.4rem 0 1rem;
+    font-size: 0.82rem;
+    color: var(--mid-gray);
+}
+
 .mode-toggle { display: flex; gap: 0.5rem; margin-bottom: 0.9rem; }
 
 .mode-btn {

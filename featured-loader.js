@@ -1,10 +1,16 @@
 /* ============================================
    FEATURED TILES LOADER
-   Loads featured.json and populates the 9 tiles
+   Loads featured.json and populates the tiles (T1-T9, plus mobile-only T10)
    ============================================ */
 
 (function() {
     'use strict';
+
+    // Complete = has a title, an eBay URL and an image source for its mode.
+    function isCompleteTile(tile) {
+        if (!tile || !tile.title || !tile.url) return false;
+        return tile.mode === 'remote' ? !!tile.remoteImage : !!tile.localImage;
+    }
 
     // Load and populate featured tiles on page load
     async function loadFeaturedTiles() {
@@ -32,10 +38,18 @@
                 tilesMap[tile.id] = tile;
             });
 
-            // Populate each card (T1-T9 correspond to first 9 cards in DOM order)
+            // Populate each card (T1-T10 correspond to the cards in DOM order)
             productCards.forEach((card, index) => {
                 const tileId = `T${index + 1}`;
                 const tileData = tilesMap[tileId];
+
+                // The mobile-only card (T10) starts [hidden] and is revealed only
+                // with complete data. T1-T9 keep their existing behaviour.
+                const mobileOnly = card.classList.contains('product-card--mobile-only');
+                if (mobileOnly && !isCompleteTile(tileData)) {
+                    card.hidden = true;
+                    return;
+                }
 
                 if (!tileData) {
                     console.warn(`No data for tile ${tileId}`);
@@ -63,6 +77,12 @@
                     if (!img) {
                         img = document.createElement('img');
                         imageContainer.appendChild(img);
+                    }
+
+                    // A mobile-only card whose image fails to load hides
+                    // itself rather than showing a broken image.
+                    if (mobileOnly) {
+                        img.onerror = () => { card.hidden = true; };
                     }
 
                     // Set image source based on mode
@@ -95,6 +115,10 @@
                     linkElement.href = tileData.url;
                     linkElement.target = '_blank';
                     linkElement.rel = 'noopener noreferrer';
+                }
+
+                if (mobileOnly) {
+                    card.hidden = false;
                 }
             });
 

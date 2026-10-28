@@ -56,9 +56,10 @@ test('commitMode: disconnected + multiple JSON files = zip (paths must be preser
 
 /* ---------------- Featured Finds ---------------- */
 
-test('featured: normalizeTiles always yields exactly 9 canonical slots', function () {
+test('featured: normalizeTiles always yields exactly 10 canonical slots (T1-T10)', function () {
     var tiles = Featured.normalizeTiles(JSON.parse(featuredRaw));
-    assert.strictEqual(tiles.length, 9);
+    assert.strictEqual(Featured.TILE_COUNT, 10);
+    assert.strictEqual(tiles.length, 10);
     tiles.forEach(function (t, i) {
         assert.strictEqual(t.id, 'T' + (i + 1));
         assert.deepStrictEqual(Object.keys(t).sort(),
@@ -91,7 +92,7 @@ test('featured: buildFileSet emits valid featured.json with updatedAt + tiles', 
     var built = Featured.buildFileSet(tiles);
     var parsed = JSON.parse(built.json);
     assert.ok(typeof parsed.updatedAt === 'string');
-    assert.strictEqual(parsed.tiles.length, 9);
+    assert.strictEqual(parsed.tiles.length, 10);
     assert.strictEqual(built.json.slice(-1) !== '\n', true, 'featured.json keeps no trailing newline');
 });
 
@@ -131,6 +132,53 @@ test('featured: draft-vs-repo snapshot detects an edit (banner, not silent overw
     assert.strictEqual(AC.deepEqual(draft, repo), true);
     draft[0].price = '$9,999';
     assert.strictEqual(AC.deepEqual(draft, repo), false);
+});
+
+test('featured: a legacy 9-tile file gains an empty T10 and keeps T1-T9 exactly', function () {
+    var legacy = JSON.parse(featuredRaw);
+    legacy.tiles = legacy.tiles.filter(function (t) { return t.id !== 'T10'; });
+    var tiles = Featured.normalizeTiles(legacy);
+    assert.deepStrictEqual(tiles.map(function (t) { return t.id; }),
+        ['T1', 'T2', 'T3', 'T4', 'T5', 'T6', 'T7', 'T8', 'T9', 'T10']);
+    legacy.tiles.forEach(function (o, i) {
+        assert.deepStrictEqual(tiles[i], Featured.normalizeTile(o, o.id), o.id + ' unchanged');
+    });
+    assert.deepStrictEqual(tiles[9], Featured.defaultTile('T10'));
+    assert.strictEqual(tiles[9].title, '');
+    assert.strictEqual(tiles[9].url, '');
+});
+
+test('featured: T10 round-trips through buildFileSet like any other tile', function () {
+    var tiles = Featured.normalizeTiles(JSON.parse(featuredRaw));
+    var t10 = tiles[9];
+    t10.title = 'Mobile find'; t10.price = '$10'; t10.url = 'https://www.ebay.com/itm/1';
+    t10.mode = 'local'; t10._file = { name: 'photo.WEBP' };
+    var built = Featured.buildFileSet(tiles);
+    assert.deepStrictEqual(built.files.map(function (f) { return f.path; }),
+        ['featured.json', 'images/featured/T10.webp']);
+    var reloaded = Featured.normalizeTiles(JSON.parse(built.json));
+    assert.strictEqual(reloaded[9].title, 'Mobile find');
+    assert.strictEqual(reloaded[9].localImage, 'images/featured/T10.webp');
+    assert.deepStrictEqual(Featured.snapshot(reloaded.slice(0, 9)),
+        Featured.snapshot(Featured.normalizeTiles(JSON.parse(featuredRaw)).slice(0, 9)), 'T1-T9 untouched');
+});
+
+test('featured: only T10 is flagged mobile-only', function () {
+    assert.deepStrictEqual(Object.keys(Featured.MOBILE_ONLY), ['T10']);
+});
+
+test('featured-loader: incomplete-data guard is scoped to the mobile-only card', function () {
+    assert.ok(/mobileOnly && !isCompleteTile\(tileData\)/.test(featuredLoaderSrc), 'guard gated on mobileOnly');
+    assert.ok(/classList\.contains\('product-card--mobile-only'\)/.test(featuredLoaderSrc), 'keyed on marker class');
+});
+
+test('homepage: exactly one mobile-only card, last in the grid, hidden until loaded', function () {
+    var html = fs.readFileSync(path.join(repoRoot, 'index.html'), 'utf8');
+    var grid = html.slice(html.indexOf('class="product-grid"'), html.indexOf('class="section-cta"'));
+    var cards = grid.match(/<article class="product-card[^"]*"[^>]*>/g);
+    assert.strictEqual(cards.length, 10);
+    assert.strictEqual(cards.filter(function (c) { return /product-card--mobile-only/.test(c); }).length, 1);
+    assert.ok(/product-card--mobile-only" hidden>/.test(cards[9]), 'T10 is the 10th card and starts hidden');
 });
 
 test('featured-loader: still tolerates legacy data (no alt / no enabled keys)', function () {

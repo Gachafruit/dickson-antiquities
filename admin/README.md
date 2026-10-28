@@ -23,7 +23,7 @@ trustworthy origin.
 | Page | Owns | Writes |
 | --- | --- | --- |
 | `index.html` | landing page | — |
-| `featured-manager.html` | the 9 homepage Featured Finds tiles | `featured.json`, `images/featured/<id>.<ext>` |
+| `featured-manager.html` | the 10 homepage Featured Finds tiles (T1–T9, plus T10 shown only while the grid is two columns) | `featured.json`, `images/featured/<id>.<ext>` |
 | `showcase-manager.html` | the eBay item-ID list for "From Our Collection" | `showcase.json` (read by the Cloudflare Worker) |
 
 Instagram is Worker-driven and has no manager.

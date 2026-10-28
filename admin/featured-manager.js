@@ -1,6 +1,6 @@
 /* ============================================
    FEATURED FINDS MANAGER
-   Nine fixed homepage tiles (T1-T9) -> featured.json
+   Ten fixed homepage tiles (T1-T9, plus mobile-only T10) -> featured.json
 
    Repository is authoritative. localStorage is a draft convenience only.
    ============================================ */
@@ -8,7 +8,9 @@
 (function (root) {
     'use strict';
 
-    var TILE_COUNT = 9;
+    var TILE_COUNT = 10;
+    // Shown on the homepage only while the grid is two columns (see styles.css).
+    var MOBILE_ONLY = { T10: true };
     var STORAGE_KEY = 'dickson_featured_draft';
     var REPO_PATH = 'featured.json';
     var HTTP_URL = '/featured.json';
@@ -45,7 +47,7 @@
         return t;
     }
 
-    // Build the canonical 9-slot array from a parsed featured.json (or draft).
+    // Build the canonical TILE_COUNT-slot array from a parsed featured.json (or draft).
     function normalizeTiles(parsed) {
         var byId = {};
         var list = (parsed && Array.isArray(parsed.tiles)) ? parsed.tiles
@@ -114,7 +116,8 @@
         extOf: extOf,
         imagePathFor: imagePathFor,
         buildFileSet: buildFileSet,
-        TILE_COUNT: TILE_COUNT
+        TILE_COUNT: TILE_COUNT,
+        MOBILE_ONLY: MOBILE_ONLY
     };
 
     if (typeof module !== 'undefined' && module.exports) {
@@ -330,11 +333,17 @@
         var d = document.createElement('div');
         d.className = 'tile-editor';
         d.dataset.id = t.id;
+        var mobileOnly = !!MOBILE_ONLY[t.id];
+        if (mobileOnly) d.classList.add('tile-editor--mobile-only');
         d.innerHTML =
             '<div class="tile-header">' +
-                '<span class="tile-id">' + t.id + '</span>' +
+                '<span class="tile-id">' + t.id +
+                    (mobileOnly ? ' <span class="tile-badge">Mobile only</span>' : '') + '</span>' +
                 '<label class="checkbox-row"><input type="checkbox" data-f="enabled" checked> Shown on site</label>' +
             '</div>' +
+            (mobileOnly ? '<p class="tile-note">Shown only when the homepage grid is two columns (phones, ' +
+                'tablets, narrow windows) to complete the last row; hidden on desktop. Stays hidden until it ' +
+                'has a title, eBay URL and image.</p>' : '') +
             '<div class="form-group"><label>Title</label>' +
                 '<input type="text" data-f="title" placeholder="e.g. Antique Silver Tea Set"></div>' +
             '<div class="form-group"><label>Price</label>' +

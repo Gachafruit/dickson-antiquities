@@ -438,6 +438,34 @@ button {
     margin-top: var(--spacing-sm);
 }
 
+/* T10: mobile-only tile that completes the last row whenever the grid is two
+   columns. auto-fill drops from 3 to 2 columns below 3 x 280px + 2 x 40px gap
+   = 920px of grid width, so this queries the grid's own container rather than
+   the viewport (no scrollbar drift). The reveal never overrides the loader:
+   [hidden] (no/incomplete data) is excluded, and its inline display:none
+   (enabled:false) outranks these rules. */
+#featured .section-container {
+    container-type: inline-size;
+}
+
+.product-card--mobile-only {
+    display: none;
+}
+
+@container (max-width: 919.98px) {
+    .product-card--mobile-only:not([hidden]) {
+        display: block;
+    }
+}
+
+/* Fallback for browsers without container queries: the mobile grid is always
+   two columns. */
+@media (max-width: 768px) {
+    .product-card--mobile-only:not([hidden]) {
+        display: block;
+    }
+}
+
 /* ============================================
    NEWEST ARRIVALS
    ============================================ */
